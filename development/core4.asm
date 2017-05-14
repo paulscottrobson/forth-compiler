@@ -6,9 +6,24 @@
 ; ****************************************************************************************************
 ; ****************************************************************************************************
 
+; ****************************************************************************************************
+;
+;	These words are accessed/changed by the compiler, so it knows (i) where to start the program
+;	and (ii) where it can compile code.
+;
+; ****************************************************************************************************
+
 BootAddress:
 	defw 	BootWord 						; start of threaded word.
+FreeAddress:
+	defw 	EndOfCode 						; end of code that is built with the assembler.
 
+; ****************************************************************************************************
+;
+;										Start Forth Core
+;
+; ****************************************************************************************************
+	
 start:
 	ld 		ix,Core_Continue  				; these allow us to do fast jumps in and out of routines.
 	ld 		iy,Core_Call 					; also saving a byte on long jumps.

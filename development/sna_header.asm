@@ -46,9 +46,7 @@ VideoMemory:
 AttributeMemory:
     defs    0x300
 EndVideoMemory:
-;
-;   Boot. We fill video RAM with random stuff just so we know we are working.
-;
+
 __bootSNA:
     jp      start
 
