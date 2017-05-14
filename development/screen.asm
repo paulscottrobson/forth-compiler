@@ -18,6 +18,10 @@ PrintCharL:
 	push 	de
 	push 	hl
 
+	ld 		a,l 							; check for CR ?
+	cp 		13
+	jr		z,__PCLReturn
+
 	ld 		b,0 							; B is the reversing byte
 	bit 	7,l 							; if bit 7 set
 	jr 		z,__PCANotReverse
@@ -63,10 +67,36 @@ __PCANotNewPage:
 	ld 		(__PCAVideoPos),hl 				; update new position in video / attr
 	ld 		(__PCAAttribPos),de 			
 
+__PCLExit:
 	pop 	hl 								; destack.
 	pop 	de
 	pop 	bc
 	pop 	af
+	ret
+
+__PCLReturn: 								; carriage return.
+	ld 		l,' '
+	call 	PrintCharL
+	ld 		a,(__PCAVideoPos)
+	and 	31
+	jr 		nz,__PCLReturn
+	jr 		__PCLExit
+
+; ****************************************************************************************************
+;
+;									Print HL in hexadecimal
+;
+; ****************************************************************************************************
+
+PrintInteger:
+	push 	hl
+	ld 		l,' ' 							; print leading space
+	call 	PrintCharL
+	pop 	hl
+	ld 		a,h
+	call 	PrintByteA
+	ld 		a,l
+	call 	PrintByteA
 	ret
 
 ; ****************************************************************************************************
@@ -115,6 +145,8 @@ __CLSLoop2:									; fill 5800-5FFF with 7 (white)
 	ld 		a,h
 	cp 		0x60
 	jr		nz,__CLSLoop2
+	ld 		a,1 							; set border to blue.
+	out 	(0xFE),a
 	pop 	hl
 	ret
 

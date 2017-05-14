@@ -6,8 +6,8 @@
 ; ****************************************************************************************************
 ; ****************************************************************************************************
 
-Freeze:		nop
-	jr 		Freeze+1 						; So I can have a breakpoint here.
+BootAddress:
+	defw 	BootWord 						; start of threaded word.
 
 start:
 	ld 		ix,Core_Continue  				; these allow us to do fast jumps in and out of routines.
@@ -16,10 +16,9 @@ start:
 	ld 		sp,0x0000 						; sp is the data stack (works down)
 	ld 		bc,0xFF00 						; bc is the return stack (works up)
 
-	ld 		hl,BootWord						; hl is the IP (except when executing Z80 code words)
+	ld 		hl,(BootAddress)				; hl is the IP (except when executing Z80 code words)
 	inc 	hl 								; skip over the JP (IY)
 	inc 	hl
-
 	jr 		Core_Execute
 
 ; ****************************************************************************************************
@@ -68,14 +67,13 @@ Core_Execute:
 	ex 		de,hl 							; swap so when executing code word DE code ptr and so we can 
 	jp 		(hl) 							; do this 4 cycle jump
 
-
 ; ****************************************************************************************************
 ;
 ;											16 bit literal word
 ;
 ; ****************************************************************************************************
 
-WORD_Literal:								; <<.literal>>
+Core_Literal:								; <<.literal>>
 	ex 		de,hl 							; HL now contains the IP back again.
 	ld 		e,(hl) 							; load next word into DE
 	inc 	hl
@@ -90,7 +88,7 @@ WORD_Literal:								; <<.literal>>
 ;
 ; ****************************************************************************************************
 
-WORD_Return:								; <<;>>
+Core_Return:								; <<;>>
 	ld 		a,(bc) 							; pop address into DE.
 	dec 	bc
 	ld 		d,a 

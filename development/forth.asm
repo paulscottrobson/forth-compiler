@@ -1,7 +1,9 @@
 
 	include 	"sna_header.asm"			; .SNA boot header
 	include 	"core4.asm" 				; Forth core (Direct Threaded)
+	include 	"library.asm" 				; Basic FORTH words
 	include 	"screen.asm" 				; Screen I/O routines.
+
 
 BootWord:
 	jp 			(iy)
@@ -9,70 +11,38 @@ BootWord:
 	defw 		WORD_Star
 	defw 		WORD_Star
 	defw 		WORD_Star
-	defw 		WORD_Literal
- 	defw 		0x4AC7
-	defw 		WORD_PrintInteger
-	defw 		WORD_Stop
+	defw 		WORD_MinusOne
+	defw 		WORD_Zero
+	defw 		WORD_One
+	defw 		Core_Literal
+	defw 		0x1234
+	defw 		Core_Literal
+	defw 		0xF00F
+	defw 		WORD_Or	
 
+	defw 		Core_Literal
+ 	defw 		13
+	defw 		Core_Literal
+ 	defw 		0x4AC7
+
+	defw 		WORD_PrintStack
+	defw 		WORD_Drop
+	defw 		WORD_Emit
+	defw 		WORD_Star
+	defw 		WORD_Stop
 
 WORD_Star:
 	jp 			(iy)
 	defw 		WORD_FT
 	defw 		WORD_Emit
-	defw 		WORD_Return
+	defw 		Core_Return
 
 WORD_FT:
 	jp 			(iy)
-	defw 		WORD_Literal
+	defw 		Core_Literal
 	defw 		42
-	defw 		WORD_Return
+	defw 		Core_Return
 
-WORD_Emit:
-	pop 	hl 								; get character to print in L
-	call	PrintCharL
-	jp 		(ix)
-
-WORD_Add:
-	exx 
-	pop		hl
-	pop 	de
-	add 	hl,de
-	push 	hl
-	exx
-	jp 		(ix)
-
-WORD_Stop:
-	jr 		WORD_Stop
-
-WORD_Dup:
-	pop 	hl 								; get TOS and push it back twice
-	push 	hl
-	push 	hl
-	jp 		(ix) 							; return 
-
-WORD_PrintInteger:
-	ld 		l,' ' 							; print leading space
-	call 	PrintCharL
-	pop 	hl
-	ld 		a,h
-	call 	PrintByteA
-	ld 		a,l
-	call 	PrintByteA
-	jp 		(ix)
-
-WORD_Swap:
-	exx 									; use alt register set
-	pop 	hl 								; get TOS and push it back twice
-	pop 	de
-	push 	hl
-	push 	de
-	exx 
-	jp 		(ix) 							; return 
-
-WORD_ClearScreen:
-	call 	ClearScreen
-	call 	HomeCursor
-	jp 		(ix)
 
 ; ****************************************************************************************************
 ;
