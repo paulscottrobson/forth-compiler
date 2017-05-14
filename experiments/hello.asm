@@ -2,19 +2,16 @@
     include "sna_header.asm"
 
 start:
-    ld  b,0
+    ld      b,0x80
 loop2:
-    ld  hl,0x4000
-    ld  de,0x5800
+    jr      loop2
+    ld      hl,0x4000
 loop1:
     ld      a,b
     ld      (hl),a
-    ld      (de),a
-    inc     e
     inc     l    
-    jr nz,     loop1
+    jr nz,  loop1
     inc     h
-    inc     d
     ld      a,h
     cp      0x58
     jr      nz,loop1

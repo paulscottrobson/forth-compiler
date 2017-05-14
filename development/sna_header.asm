@@ -50,16 +50,7 @@ EndVideoMemory:
 ;   Boot. We fill video RAM with random stuff just so we know we are working.
 ;
 __bootSNA:
-    ld      hl,VideoMemory
-__setupAttribute:
-    ld      a,r
-    ld      (hl),a
-    inc     hl
-    ld      a,h
-    cp      EndVideoMemory/256
-    jr      nz,__setupAttribute
     jp      start
-
 
 ; *****************************************************************************************
 ;
@@ -67,12 +58,8 @@ __setupAttribute:
 ;
 ; *****************************************************************************************
 
-
-
 __stackEnd:   
     defw    __bootSNA
 
 #code FAST_RAM, 0x8000, 0x8000
-
-
 

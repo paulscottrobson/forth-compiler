@@ -1,0 +1,431 @@
+              	; --------------------------------------
+              	; zasm: assemble "forth.asm"
+              	; date: 2017-05-14 14:27:45
+              	; --------------------------------------
+
+
+              	
+              		include 	"sna_header.asm"			; .SNA boot header
+              	; *****************************************************************************************
+              	; *****************************************************************************************
+              	;
+              	;                       SNA Header - variant of the provided example.
+              	;
+              	; *****************************************************************************************
+              	; *****************************************************************************************
+              	
+              	#target sna
+              	
+              	; *****************************************************************************************
+              	;
+              	;                               saved registers, restored in NMI
+              	;
+              	; *****************************************************************************************
+              	
+0000:         	#code HEAD, 0, 27
+0000: 3F      	    defb    $3f             ; i
+0001: 0000    	    defw    0               ; hl'
+0003: 0000    	    defw    0               ; de'
+0005: 0000    	    defw    0               ; bc'
+0007: 0000    	    defw    0               ; af'
+              	
+0009: 0000    	    defw    0               ; hl
+000B: 0000    	    defw    0               ; de
+000D: 0000    	    defw    0               ; bc
+000F: 0000    	    defw    0               ; iy
+0011: 0000    	    defw    0               ; ix
+              	
+0013: 00      	    defb    0<<2            ; bit 2 = iff2 (iff1 before nmi) 0=di, 1=ei
+0014: 000000  	    defb    0,0,0           ; r,f,a
+0017: 035B    	    defw    __stackEnd      ; sp
+0019: 01      	    defb    1               ; irpt mode
+001A: 00      	    defb    0               ; border color: 0=black ... 7=white
+              	
+              	; *****************************************************************************************
+              	;
+              	;                   $4000-$7FFF. Pixel Memory, Attribute Memory, Slow RAM
+              	;
+              	; *****************************************************************************************
+              	
+4000:         	#code SLOW_RAM, 0x4000, 0x4000
+              	
+4000:         	VideoMemory:
+4000: 00000000	    defs    0x1800
+4004: 00...   	
+5800:         	AttributeMemory:
+5800: 00000000	    defs    0x300
+5804: 00...   	
+5B00:         	EndVideoMemory:
+              	;
+              	;   Boot. We fill video RAM with random stuff just so we know we are working.
+              	;
+5B00:         	__bootSNA:
+5B00: C30380  	    jp      start
+              	
+              	; *****************************************************************************************
+              	;
+              	;                            $8000-$FFFF. Non contentious memory
+              	;
+              	; *****************************************************************************************
+              	
+5B03:         	__stackEnd:   
+5B03: 005B    	    defw    __bootSNA
+              	
+8000:         	#code FAST_RAM, 0x8000, 0x8000
+              	
+              		include 	"core4.asm" 				; Forth core (Direct Threaded)
+              	; ****************************************************************************************************
+              	; ****************************************************************************************************
+              	;
+              	;													Core v4
+              	;
+              	; ****************************************************************************************************
+              	; ****************************************************************************************************
+              	
+8000: 00      	Freeze:		nop
+8001: 18FE    		jr 		Freeze+1 						; So I can have a breakpoint here.
+              	
+8003:         	start:
+8003: DD212180		ld 		ix,Core_Continue  				; these allow us to do fast jumps in and out of routines.
+8007: FD211880		ld 		iy,Core_Call 					; also saving a byte on long jumps.
+              	
+800B: 310000  		ld 		sp,0x0000 						; sp is the data stack (works down)
+800E: 0100FF  		ld 		bc,0xFF00 						; bc is the return stack (works up)
+              	
+8011: 21C580  		ld 		hl,BootWord						; hl is the IP (except when executing Z80 code words)
+8014: 23      		inc 	hl 								; skip over the JP (IY)
+8015: 23      		inc 	hl
+              	
+8016: 180A    		jr 		Core_Execute
+              	
+              	; ****************************************************************************************************
+              	;
+              	;		The JP (IY) at the start of a threaded definition comes here. DE contains
+              	; 		the old address, HL the new one.
+              	;
+              	;		Save the calling address on the stack and execute from HL. Which handily is in HL.
+              	;
+              	; ****************************************************************************************************
+              	
+8018:         	Core_Call:
+8018: 23      		inc 	hl 								; advance HL over the JP(IY) $FD $E9
+8019: 23      		inc 	hl 								; now points to the first definition
+              	
+801A: 7B      		ld 		a,e 							; push DE (old address) on the BC stack.
+801B: 03      		inc 	bc 								; unfortunately a Z80 only has one stack, so we have
+801C: 02      		ld 		(bc),a 							; to use it for either data *or* return.
+801D: 7A      		ld 		a,d
+801E: 03      		inc 	bc
+801F: 02      		ld 		(bc),a
+              	
+8020: EB      		ex 		de,hl 							; allows us to fall through to execute loop
+              	
+              	; ****************************************************************************************************
+              	;
+              	;	Ending a machine code definition comes here (using JP (IX)). We need this exchange
+              	; 	because when running m/c definition DE is the instruction pointer
+              	;
+              	; ****************************************************************************************************
+              	
+8021:         	Core_Continue:
+8021: EB      		ex 		de,hl 							; if executing code word come back here.
+              	
+              	; ****************************************************************************************************
+              	;
+              	;					Main execution entry point. Execute instruction at (DE)
+              	;
+              	; ****************************************************************************************************
+              	
+8022:         	Core_Execute:
+8022: 5E      		ld 		e,(hl)							; read address of next word at HL into DE, LSB first
+8023: 23      		inc 	hl
+8024: 56      		ld 		d,(hl)
+8025: 23      		inc 	hl
+8026: EB      		ex 		de,hl 							; swap so when executing code word DE code ptr and so we can 
+8027: E9      		jp 		(hl) 							; do this 4 cycle jump
+              	
+              	
+              	; ****************************************************************************************************
+              	;
+              	;											16 bit literal word
+              	;
+              	; ****************************************************************************************************
+              	
+8028:         	WORD_Literal:								; <<.literal>>
+8028: EB      		ex 		de,hl 							; HL now contains the IP back again.
+8029: 5E      		ld 		e,(hl) 							; load next word into DE
+802A: 23      		inc 	hl
+802B: 56      		ld 		d,(hl)
+802C: 23      		inc 	hl
+802D: D5      		push 	de 								; push word on data stack
+802E: 18F2    		jr 		Core_Execute 					; and execute without doing the DE/HL swap
+              	
+              	; ****************************************************************************************************
+              	;
+              	;												Return word.
+              	;
+              	; ****************************************************************************************************
+              	
+8030:         	WORD_Return:								; <<;>>
+8030: 0A      		ld 		a,(bc) 							; pop address into DE.
+8031: 0B      		dec 	bc
+8032: 57      		ld 		d,a 
+8033: 0A      		ld 		a,(bc)
+8034: 0B      		dec 	bc
+8035: 5F      		ld 		e,a
+8036: DDE9    		jp 		(ix) 							; this will put DE -> HL and start executing one level up.
+              	
+              		include 	"screen.asm" 				; Screen I/O routines.
+              	; ****************************************************************************************************
+              	; ****************************************************************************************************
+              	;
+              	;			Replacement for Spectrums Screen Display Routine, straight 32x24 video display
+              	;
+              	; ****************************************************************************************************
+              	; ****************************************************************************************************
+              	
+              	; ****************************************************************************************************
+              	;
+              	;							Print character in L ; all registers preserved.
+              	;
+              	; ****************************************************************************************************
+              	
+8038:         	PrintCharL:
+8038: F5      		push 	af 								; stack registers
+8039: C5      		push 	bc 								
+803A: D5      		push 	de
+803B: E5      		push 	hl
+              	
+803C: 0600    		ld 		b,0 							; B is the reversing byte
+803E: CB7D    		bit 	7,l 							; if bit 7 set
+8040: 2803    		jr 		z,__PCANotReverse
+8042: 05      		dec 	b 								; B becomes $FF
+8043: CBBD    		res 	7,l 							; drop bit 7
+8045:         	__PCANotReverse:
+8045: 2600    		ld 		h,0 							; HL to 16 bit
+8047: ED5BBE80		ld 		de,(__PCAFont)					; DE = Font Base
+804B: 29      		add 	hl,hl 							; calc Font Base + char * 8
+804C: 29      		add 	hl,hl
+804D: 29      		add 	hl,hl
+804E: 19      		add 	hl,de
+804F: EB      		ex 		de,hl 							; put in DE
+8050: 2AC080  		ld 		hl,(__PCAVideoPos) 				; get write address
+8053: E5      		push 	hl 								; save for later
+8054:         	_PCALoop:	
+8054: 1A      		ld 		a,(de) 							; read font char
+8055: A8      		xor 	b 								; reverse byte
+8056: 77      		ld 		(hl),a 							; write to screen
+8057: 1C      		inc 	e 								; bump pointers
+8058: 24      		inc 	h
+8059: 7C      		ld 		a,h 							; until done whole row
+805A: E607    		and 	7
+805C: 20F6    		jr 		nz,_PCALoop
+              	
+              	
+805E: ED5BC280		ld 		de,(__PCAAttribPos)				; copy colour byte to attribute memory.
+8062: 3AC480  		ld 		a,(__PCAColour)
+8065: 12      		ld 		(de),a
+8066: 13      		inc 	de
+              	
+8067: E1      		pop 	hl 								; restore original video position to HL
+8068: 2C      		inc 	l 								; right one
+8069: 200C    		jr 		nz,__PCANotNewPage 				; if nz don't need new 1/4k page
+806B: 7C      		ld 		a,h 							; advance to next quarter page
+806C: C608    		add 	8
+806E: 67      		ld 		h,a 	
+806F: FE58    		cp 		0x58 							; we only have 3, this is the attribute page
+8071: 2004    		jr 		nz,__PCANotNewPage
+8073: 2640    		ld 		h,0x40 							; wrap round to top.
+8075: 1658    		ld 		d,0x58 							; reset attribute memory pointer
+8077:         	__PCANotNewPage:
+8077: 22C080  		ld 		(__PCAVideoPos),hl 				; update new position in video / attr
+807A: ED53C280		ld 		(__PCAAttribPos),de 			
+              	
+807E: E1      		pop 	hl 								; destack.
+807F: D1      		pop 	de
+8080: C1      		pop 	bc
+8081: F1      		pop 	af
+8082: C9      		ret
+              	
+              	; ****************************************************************************************************
+              	;
+              	;									Print Byte in Hexadecimal
+              	;
+              	; ****************************************************************************************************
+              	
+8083:         	PrintByteA:
+8083: F5      		push 	af 								; save A on stack
+8084: 1F      		rra 									; shift right 4
+8085: 1F      		rra
+8086: 1F      		rra
+8087: 1F      		rra
+8088: CD8C80  		call	__PBANibble 					; print it
+808B: F1      		pop 	af 								; restore
+808C:         	__PBANibble:
+808C: F6F0    		or 		0F0h 							; DAA trick
+808E: 27      		daa
+808F: C6A0    		add 	a,0A0h
+8091: CE40    		adc 	a,040h
+8093: E5      		push 	hl 								; print character
+8094: 6F      		ld 		l,a
+8095: CD3880  		call 	PrintCharL
+8098: E1      		pop 	hl
+8099: C9      		ret
+              	
+              	; ****************************************************************************************************
+              	;	
+              	;											Clear Screen
+              	;
+              	; ****************************************************************************************************
+              	
+809A:         	ClearScreen:
+809A: E5      		push 	hl
+809B: 210040  		ld 		hl,0x4000 						; fill 4000-57FF with zero
+809E:         	__CLSLoop1:
+809E: 3600    		ld 		(hl),0
+80A0: 23      		inc 	hl
+80A1: 7C      		ld 		a,h
+80A2: FE58    		cp 		0x58
+80A4: 20F8    		jr		nz,__CLSLoop1
+80A6:         	__CLSLoop2:									; fill 5800-5FFF with 7 (white)
+80A6: 3607    		ld 		(hl),7
+80A8: 23      		inc 	hl
+80A9: 7C      		ld 		a,h
+80AA: FE60    		cp 		0x60
+80AC: 20F8    		jr		nz,__CLSLoop2
+80AE: E1      		pop 	hl
+80AF: C9      		ret
+              	
+              	; ****************************************************************************************************
+              	;
+              	;												Home Cursor
+              	;
+              	; ****************************************************************************************************
+              	
+80B0:         	HomeCursor:	
+80B0: E5      		push 	hl
+80B1: 210058  		ld 		hl,0x5800 						; reset attribute pos
+80B4: 22C280  		ld 		(__PCAAttribPos),hl
+80B7: 2640    		ld 		h,0x40 							; reset video pos
+80B9: 22C080  		ld 		(__PCAVideoPos),hl
+80BC: E1      		pop 	hl
+80BD: C9      		ret
+              	
+80BE:         	__PCAFont: 									; font base here
+80BE: 003C    		defw 	0x3C00
+80C0:         	__PCAVideoPos: 								; current video memory pointer.
+80C0: 0040    		defw 	VideoMemory
+80C2:         	__PCAAttribPos:								; current attribute pointer
+80C2: 0058    		defw 	AttributeMemory
+80C4:         	__PCAColour: 								; current colour to use
+80C4: 44      		defb 	0x44
+              	
+80C5:         	BootWord:
+80C5: FDE9    		jp 			(iy)
+80C7: 1481    		defw 		WORD_ClearScreen
+80C9: D780    		defw 		WORD_Star
+80CB: D780    		defw 		WORD_Star
+80CD: D780    		defw 		WORD_Star
+80CF: 2880    		defw 		WORD_Literal
+80D1: C74A    	 	defw 		0x4AC7
+80D3: FC80    		defw 		WORD_PrintInteger
+80D5: F580    		defw 		WORD_Stop
+              	
+              	
+80D7:         	WORD_Star:
+80D7: FDE9    		jp 			(iy)
+80D9: DF80    		defw 		WORD_FT
+80DB: E780    		defw 		WORD_Emit
+80DD: 3080    		defw 		WORD_Return
+              	
+80DF:         	WORD_FT:
+80DF: FDE9    		jp 			(iy)
+80E1: 2880    		defw 		WORD_Literal
+80E3: 2A00    		defw 		42
+80E5: 3080    		defw 		WORD_Return
+              	
+80E7:         	WORD_Emit:
+80E7: E1      		pop 	hl 								; get character to print in L
+80E8: CD3880  		call	PrintCharL
+80EB: DDE9    		jp 		(ix)
+              	
+80ED:         	WORD_Add:
+80ED: D9      		exx 
+80EE: E1      		pop		hl
+80EF: D1      		pop 	de
+80F0: 19      		add 	hl,de
+80F1: E5      		push 	hl
+80F2: D9      		exx
+80F3: DDE9    		jp 		(ix)
+              	
+80F5:         	WORD_Stop:
+80F5: 18FE    		jr 		WORD_Stop
+              	
+80F7:         	WORD_Dup:
+80F7: E1      		pop 	hl 								; get TOS and push it back twice
+80F8: E5      		push 	hl
+80F9: E5      		push 	hl
+80FA: DDE9    		jp 		(ix) 							; return 
+              	
+80FC:         	WORD_PrintInteger:
+80FC: 2E20    		ld 		l,' ' 							; print leading space
+80FE: CD3880  		call 	PrintCharL
+8101: E1      		pop 	hl
+8102: 7C      		ld 		a,h
+8103: CD8380  		call 	PrintByteA
+8106: 7D      		ld 		a,l
+8107: CD8380  		call 	PrintByteA
+810A: DDE9    		jp 		(ix)
+              	
+810C:         	WORD_Swap:
+810C: D9      		exx 									; use alt register set
+810D: E1      		pop 	hl 								; get TOS and push it back twice
+810E: D1      		pop 	de
+810F: E5      		push 	hl
+8110: D5      		push 	de
+8111: D9      		exx 
+8112: DDE9    		jp 		(ix) 							; return 
+              	
+8114:         	WORD_ClearScreen:
+8114: CD9A80  		call 	ClearScreen
+8117: CDB080  		call 	HomeCursor
+811A: DDE9    		jp 		(ix)
+              	
+              	; ****************************************************************************************************
+              	;
+              	;												Examples
+              	;
+              	; ****************************************************************************************************
+              	
+              	;
+              	;	Code word (example) DUP. Note that in code words DE is the code pointer.
+              	;	We just go straight in with the machine code. Code words can only use HL as a temporary value
+              	; 	so for things like + use EXX and do it in the alternate set.
+              	;
+              	;
+              	;dup:										; <<dup>>
+              	;	pop 	hl
+              	;	push 	hl
+              	;	push 	hl
+              	;	jp		(ix)							; and fix up so HL is the code pointer again and loop
+              	;
+              	;
+              	;
+              	;	Word built up out of other definitions.
+              	;	
+              	;	jp 		(iy)							; identifies as a word from words.
+              	;
+              	;	; first def addr
+              	;	; second def addr
+              	;	;	..
+              	;	;	..
+              	;
+              	;	defw 	Core_Return 					; now we want to go back.
+              	;
+              	
+              	
+              	
+
+
+total time: 0.0008 sec.
+no errors
