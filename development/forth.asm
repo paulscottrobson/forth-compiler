@@ -20,7 +20,7 @@ Test:
 	push 		bc
 	push 		de
 	push 		ix
-	call 		DrawSprite
+	call 		TSDraw
 	pop 		ix
 	pop 		de
 	pop			bc

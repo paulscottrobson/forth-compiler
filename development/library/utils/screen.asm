@@ -135,9 +135,6 @@ ClearScreen:
 	ld 		hl,0x4000 						; fill 4000-57FF with zero
 __CLSLoop1:
 	ld 		(hl),0
-
-	ld 		(hl),042h
-
 	inc 	hl
 	ld 		a,h
 	cp 		0x58

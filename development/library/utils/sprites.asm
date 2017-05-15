@@ -22,12 +22,44 @@
 ;	+8,9 		either 0 (no mask data) or pointer to mask data, note set to clear background.
 ;
 
-DrawSprite:
-	ld 		ix,testSprite
+; ****************************************************************************************************
+;
+;												Draw Sprite
+;
+; ****************************************************************************************************
 
-;
-;	Set up  screen position : TODO
-;
+DrawSprite:
+	ld 		a,(ix+1) 						; get the Y position.
+	cp 		192
+	ret 	nc 								; if >= 24*8 then exit now.	
+
+	ld  	e, a 							; save in E
+	and 	7 								; get the three low bits.
+	ld  	h,a 							; goes in H bits 2..0
+
+	ld 		a,e 							; we want bits 7..6 to be in 4..3
+	rra 									; in 6..5
+	rra 									; in 5..4
+	rra										; in 4..3
+	and 	018h 							; isolate
+	or 		h 								; or with H
+	or 		040h 							; set bit 6
+	ld 		h,a 							; and copy back.
+
+	ld 		a,e 							; we want bits 5,4,3 to be in slots 7,6,5
+	add 	a,a
+	add 	a,a
+	and 	0E0h
+	ld 		l,a 							; save in L
+
+	ld 		a,(ix+0) 						; get X bits 7..3 - 4..0
+	rra
+	rra
+	rra	
+	and 	1Fh
+	or  	l 								; or into L and write back
+	ld  	l,a 							; HL now is the base graphic
+	ld 		(__DSLoadScreenAddress+1),hl 	; save it out
 
 ; ****************************************************************************************************
 ;						Copy structure details into the self modifying code
@@ -192,7 +224,6 @@ __DSLoadVerticalCount:
 	jr 		nz,__DSMainLoop 				; keep going till done all lines, or reached the end of screen memory
 __DSExitEarly:
 
-;	call 	__DSRestoreSavedScreen
 	ret
 
 ; ****************************************************************************************************
@@ -290,9 +321,29 @@ __DSShiftEntry:
 
 ; ****************************************************************************************************
 
+TSDraw:
+	ld 		ix,testSprite
+TSLoop:
+	call 	DrawSprite
+	ld 		hl,1
+TSDelay:
+	dec 	hl
+	ld 		a,h
+	or 		l
+	jr 		nz,TSDelay
+	call	__DSRestoreSavedScreen
+	inc 	(ix+0)
+	inc 	(ix+1)
+	ld 		a,(ix+0)
+	cp 		192
+	jr 		nz,TSLoop
+	ld 		(ix+0),64
+	ld 		(ix+1),32
+	jr 		TSLoop
+
 testSprite:
-	defb 	7
-	defb 	4
+	defb 	64
+	defb 	32	
 	defb 	10
 	defb 	0
 	defw 	graphicData
@@ -300,7 +351,7 @@ testSprite:
 	defw 	maskData
 
 backStore:
-	defs 	8*3
+	defs 	10*3+2
 
 graphicData:
 	defb 	0FFh,0FFh
