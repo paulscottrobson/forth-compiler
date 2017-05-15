@@ -12,28 +12,15 @@ BootWord:
 	jp 			(iy)
 	defw 		WORD_ClearScreen
 	defw 		WORD_Star
+	defw 		Test
 	defw 		WORD_Star
-	defw 		WORD_Star
-	defw 		WORD_CR
-
-	defw 		Core_Literal
-	defw 		0x11
-	defw 		Core_Literal
-	defw 		0x22
-	defw 		Core_Literal
-	defw 		0x33
-
-	defw 		WORD_PrintStack
-	defw 		TestR
-	defw 		WORD_PrintStack
 	defw 		WORD_Stop
 
-TestR:
-	jp 			(iy)
-	defw 		WORD_RStoDS
-	defw 		WORD_PrintStack
-	defw 		WORD_DStoRS
-	defw 		Core_Return
+Test:
+	push 		ix
+	call 		DrawSprite
+	pop 		ix
+	jp 			(ix)
 
 WORD_Star:
 	jp 			(iy)
