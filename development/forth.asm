@@ -14,6 +14,7 @@ BootWord:
 	defw 		WORD_Star
 	defw 		WORD_Star
 	defw 		WORD_Star
+	defw 		WORD_CR
 
 	defw 		Core_Literal
 	defw 		1
@@ -23,7 +24,8 @@ BootWord:
 	defw 		3
 	defw 		Core_Literal
 	defw 		4
-	
+	defw 		WORD_PrintStack
+	defw		WORD_Over
 	defw 		WORD_PrintStack
 	defw 		WORD_Stop
 

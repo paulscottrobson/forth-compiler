@@ -6,7 +6,6 @@
 
 ;
 ;	over rot pick
-;	1+ 1- 2+ 2- 2* 16* 256* 2/ 16/ 256/ 0= 0- 0< 
 ;	br bz bpl r> >r rdrop
 ;
 	include "library/binary.asm"

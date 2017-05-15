@@ -1,6 +1,6 @@
               	; --------------------------------------
               	; zasm: assemble "forth.asm"
-              	; date: 2017-05-14 23:14:40
+              	; date: 2017-05-15 09:48:21
               	; --------------------------------------
 
 
@@ -61,9 +61,7 @@
 5800: 00000000	    defs    0x300
 5804: 00...   	
 5B00:         	EndVideoMemory:
-              	;
-              	;   Boot. We fill video RAM with random stuff just so we know we are working.
-              	;
+              	
 5B00:         	__bootSNA:
 5B00: C30480  	    jp      start
               	
@@ -87,10 +85,23 @@
               	; ****************************************************************************************************
               	; ****************************************************************************************************
               	
+              	; ****************************************************************************************************
+              	;
+              	;	These words are accessed/changed by the compiler, so it knows (i) where to start the program
+              	;	and (ii) where it can compile code.
+              	;
+              	; ****************************************************************************************************
+              	
 8000:         	BootAddress:
-8000: 9E81    		defw 	BootWord 						; start of threaded word.
+8000: 3F82    		defw 	BootWord 						; start of threaded word.
 8002:         	FreeAddress:
-8002: C681    		defw 	EndOfCode 						; end of code that is built with the assembler.
+8002: 6D82    		defw 	EndOfCode 						; end of code that is built with the assembler.
+              	
+              	; ****************************************************************************************************
+              	;
+              	;										Start Forth Core
+              	;
+              	; ****************************************************************************************************
               		
 8004:         	start:
 8004: DD212280		ld 		ix,Core_Continue  				; these allow us to do fast jumps in and out of routines.
@@ -189,7 +200,6 @@
               	
               	;
               	;	over rot pick
-              	;	1+ 1- 2+ 2- 2* 16* 256* 2/ 16/ 256/ 0= 0- 0< 
               	;	br bz bpl r> >r rdrop
               	;
               		include "library/binary.asm"
@@ -262,7 +272,132 @@
               	;
               	; ****************************************************************************************************
               	
+              	; abs sgn
               	
+806C:         	WORD_0Minus:								; <<0->>
+806C: D9      		exx
+806D: D1      		pop 	de
+806E: 210000  		ld 		hl,0
+8071: AF      		xor 	a
+8072: ED52    		sbc 	hl,de
+8074: E5      		push 	hl
+8075: D9      		exx 	
+8076: DDE9    		jp 		(ix)
+              	
+8078:         	WORD_0Equals:
+8078: E1      		pop 	hl 								; <<0=>>
+8079: 7C      		ld 		a,h
+807A: B5      		or 		l
+807B: 2806    		jr 		z,__UNPushTrue
+807D:         	__UNPushFalse:
+807D: 210000  		ld 		hl,0
+8080: E5      		push 	hl
+8081: DDE9    		jp 		(ix)
+8083:         	__UNPushTrue:
+8083: 21FFFF  		ld 		hl,0xFFFF
+8086:         	__UNPushHLExit	
+8086: E5      		push 	hl
+8087: DDE9    		jp		(ix)
+              	
+8089:         	WORD_0LessThan:								; <<0<>>
+8089: E1      		pop 	hl
+808A: CB7C    		bit 	7,h
+808C: 20F5    		jr 		nz,__UNPushTrue
+808E: 18ED    		jr 		__UNPushFalse
+              	
+8090:         	WORD_Abs:									; <<abs>>
+8090: E1      		pop 	hl
+8091: CB7C    		bit 	7,h 							
+8093: 28F1    		jr 		z,__UNPushHLExit 				; if zero push unchanged
+8095: E5      		push 	hl
+8096: 18D4    		jr	 	WORD_0Minus 					; otherwise do 0-
+              	
+8098:         	WORD_Sgn:									; <<sgn>>
+8098: E1      		pop 	hl
+8099: CB7C    		bit 	7,h 							; -ve
+809B: 20E6    		jr 		nz,__UNPushTrue
+809D: 7C      		ld 		a,h 							; zero
+809E: B5      		or 		l
+809F: 28DC    		jr 		z,__UNPushFalse
+80A1: 210100  		ld 		hl,1 							; +ve push 1
+80A4: 18E0    		jr 		__UNPushHLExit
+              		
+              	; ****************************************************************************************************
+              	;
+              	;										Arithmetic Quickies
+              	;
+              	; ****************************************************************************************************
+              	
+80A6: E1      		pop		hl								; <<1+>>
+80A7: 1802    		jr 		__OnePlus
+              	
+80A9:         	WORD_TwoPlus
+80A9: E1      		pop		hl								; <<2+>>
+80AA: 23      		inc 	hl
+80AB:         	__OnePlus:	
+80AB: 23      		inc 	hl
+80AC: E5      		push 	hl
+80AD: DDE9    		jp 		(ix)
+              	
+80AF: E1      		pop		hl								; <<1->>
+80B0: 1802    		jr 		__OneMinus
+              	
+80B2: E1      		pop		hl								; <<1->>
+80B3: 2B      		dec 	hl
+80B4:         	__OneMinus:	
+80B4: 2B      		dec 	hl
+80B5: E5      		push 	hl
+80B6: DDE9    		jp 		(ix)
+              	
+80B8: E1      		pop		hl 								; <<2*>>
+80B9: 1807    		jr 		__TwoTimes
+              	
+80BB: E1      		pop 	hl								; <<4*>>
+80BC: 1803    		jr 		__FourTimes
+              	
+80BE: E1      		pop		hl 								; <<16*>>
+80BF: 29      		add 	hl,hl
+80C0: 29      		add 	hl,hl
+80C1:         	__FourTimes:
+80C1: 29      		add 	hl,hl
+80C2:         	__TwoTimes:	
+80C2: 29      		add 	hl,hl
+80C3: E5      		push 	hl
+80C4: DDE9    		jp 		(ix)
+              	
+80C6: E1      		pop 	hl 								; <<256*>
+80C7: 65      		ld	 	h,l
+80C8: 2E00    		ld	 	l,0
+80CA: E5      		push 	hl
+80CB: DDE9    		jp 		(ix)
+              	
+80CD: E1      		pop 	hl 								; <<2/>>
+80CE: 180D    		jr 		__TwoDivide	
+              	
+80D0: E1      		pop 	hl 								; <<16/>>
+              	
+80D1: CB2C    		sra 	h
+80D3: CB1D    		rr 		l
+80D5: CB2C    		sra 	h
+80D7: CB1D    		rr 		l
+80D9: CB2C    		sra 	h
+80DB: CB1D    		rr 		l
+              	
+80DD:         	__TwoDivide:
+80DD: CB2C    		sra 	h
+80DF: CB1D    		rr 		l
+80E1: E5      		push 	hl
+80E2: DDE9    		jp 		(ix)
+              	
+80E4: E1      		pop 	hl								; <<256/>>
+80E5: 6C      		ld	 	l,h
+80E6: 2600    		ld 	 	h,0
+80E8: CB7D    		bit 	7,l 							; sign extend
+80EA: 2801    		jr 		z,__ByteDivideNotSigned
+80EC: 25      		dec 	h
+80ED:         	__ByteDivideNotSigned: 	
+80ED: E5      		push 	hl
+80EE: DDE9    		jp 		(ix)
               		include "library/constants.asm"
               	; ****************************************************************************************************
               	;
@@ -281,45 +416,45 @@
               	;	used for variables/arrays/constants as these are all 6 bytes long (same as .literal [n] return)
               	;
               		ConstantWord 	-1
-806C: 21FFFF  		ld 		hl,-1 						; <<-1>>
-806F: E5      		push 	hl
-8070: DDE9    		jp 		(ix)
+80F0: 21FFFF  		ld 		hl,-1 						; <<-1>>
+80F3: E5      		push 	hl
+80F4: DDE9    		jp 		(ix)
               		ConstantWord 	0	
-8072: 210000  		ld 		hl,0 						; <<0>>
-8075: E5      		push 	hl
-8076: DDE9    		jp 		(ix)
+80F6: 210000  		ld 		hl,0 						; <<0>>
+80F9: E5      		push 	hl
+80FA: DDE9    		jp 		(ix)
               		ConstantWord 	1
-8078: 210100  		ld 		hl,1 						; <<1>>
-807B: E5      		push 	hl
-807C: DDE9    		jp 		(ix)
+80FC: 210100  		ld 		hl,1 						; <<1>>
+80FF: E5      		push 	hl
+8100: DDE9    		jp 		(ix)
               		ConstantWord 	2
-807E: 210200  		ld 		hl,2 						; <<2>>
-8081: E5      		push 	hl
-8082: DDE9    		jp 		(ix)
+8102: 210200  		ld 		hl,2 						; <<2>>
+8105: E5      		push 	hl
+8106: DDE9    		jp 		(ix)
               		ConstantWord 	4
-8084: 210400  		ld 		hl,4 						; <<4>>
-8087: E5      		push 	hl
-8088: DDE9    		jp 		(ix)
+8108: 210400  		ld 		hl,4 						; <<4>>
+810B: E5      		push 	hl
+810C: DDE9    		jp 		(ix)
               		ConstantWord 	8
-808A: 210800  		ld 		hl,8 						; <<8>>
-808D: E5      		push 	hl
-808E: DDE9    		jp 		(ix)
+810E: 210800  		ld 		hl,8 						; <<8>>
+8111: E5      		push 	hl
+8112: DDE9    		jp 		(ix)
               		ConstantWord 	10
-8090: 210A00  		ld 		hl,10 						; <<10>>
-8093: E5      		push 	hl
-8094: DDE9    		jp 		(ix)
+8114: 210A00  		ld 		hl,10 						; <<10>>
+8117: E5      		push 	hl
+8118: DDE9    		jp 		(ix)
               		ConstantWord 	16
-8096: 211000  		ld 		hl,16 						; <<16>>
-8099: E5      		push 	hl
-809A: DDE9    		jp 		(ix)
+811A: 211000  		ld 		hl,16 						; <<16>>
+811D: E5      		push 	hl
+811E: DDE9    		jp 		(ix)
               		ConstantWord 	100
-809C: 216400  		ld 		hl,100 						; <<100>>
-809F: E5      		push 	hl
-80A0: DDE9    		jp 		(ix)
+8120: 216400  		ld 		hl,100 						; <<100>>
+8123: E5      		push 	hl
+8124: DDE9    		jp 		(ix)
               		ConstantWord 	256
-80A2: 210001  		ld 		hl,256 						; <<256>>
-80A5: E5      		push 	hl
-80A6: DDE9    		jp 		(ix)
+8126: 210001  		ld 		hl,256 						; <<256>>
+8129: E5      		push 	hl
+812A: DDE9    		jp 		(ix)
               	
               		include "library/stack.asm"
               	; ****************************************************************************************************
@@ -328,25 +463,34 @@
               	;
               	; ****************************************************************************************************
               	
-80A8:         	WORD_Dup:									; <<dup>>
-80A8: E1      		pop 	hl 								; get TOS and push it back twice
-80A9: E5      		push 	hl
-80AA: E5      		push 	hl
-80AB: DDE9    		jp 		(ix) 							; return 
+812C:         	WORD_Dup:									; <<dup>>
+812C: E1      		pop 	hl 								; get TOS and push it back twice
+812D: E5      		push 	hl
+812E: E5      		push 	hl
+812F: DDE9    		jp 		(ix) 							; return 
               	
-80AD:         	WORD_Drop:									; <<drop>>
-80AD: E1      		pop 	hl
-80AE: DDE9    		jp 		(ix)
+8131:         	WORD_Drop:									; <<drop>>
+8131: E1      		pop 	hl
+8132: DDE9    		jp 		(ix)
               	
-80B0:         	WORD_Swap:									; <<swap>>
-80B0: D9      		exx 									; use alt register set
-80B1: E1      		pop 	hl 								; get TOS and push it back twice
-80B2: D1      		pop 	de
-80B3: E5      		push 	hl
-80B4: D5      		push 	de
-80B5: D9      		exx 
-80B6: DDE9    		jp 		(ix) 							; return 
+8134:         	WORD_Swap:									; <<swap>>
+8134: D9      		exx 									; use alt register set
+8135: E1      		pop 	hl 								; get TOS and push it back twice
+8136: D1      		pop 	de
+8137: E5      		push 	hl
+8138: D5      		push 	de
+8139: D9      		exx 
+813A: DDE9    		jp 		(ix) 							; return 
               	
+813C:         	WORD_Over:									; <<over>>
+813C: D9      		exx 						
+813D: E1      		pop 	hl 								; tos
+813E: D1      		pop 	de 								; tos 2
+813F: D5      		push 	de 								; push back
+8140: E5      		push 	hl
+8141: D5      		push 	de 								; with tos 2 on top
+8142: D9      		exx
+8143: DDE9    		jp 		(ix)
               		include "library/io.asm"
               	; ****************************************************************************************************
               	;
@@ -354,42 +498,53 @@
               	;
               	; ****************************************************************************************************
               	
-80B8:         	WORD_Emit:									; <<emit>>
-80B8: E1      		pop 	hl 								; get character to print in L
-80B9: CDE880  		call	PrintCharL
-80BC: DDE9    		jp 		(ix)
+8145:         	WORD_Emit:									; <<emit>>
+8145: E1      		pop 	hl 								; get character to print in L
+8146: CD8981  		call	PrintCharL
+8149: DDE9    		jp 		(ix)
               	
-80BE:         	WORD_PrintInteger:							; <<.>>
-80BE: E1      		pop 	hl
-80BF: CD4681  		call 	PrintInteger
-80C2: DDE9    		jp 		(ix)
+814B:         	WORD_PrintInteger:							; <<.>>
+814B: E1      		pop 	hl
+814C: CDE781  		call 	PrintInteger
+814F: DDE9    		jp 		(ix)
               	
-80C4:         	WORD_PrintStack:							; <<.stack>>
-80C4: D5      		push 	de 								; save DE
-80C5: 210000  		ld 		hl,0  							; get SP into HL
-80C8: 23      		inc 	hl 								; skip over PUSH DE above
-80C9: 23      		inc 	hl
-80CA: 39      		add 	hl,sp
-80CB:         	__PSLoop:
-80CB: 5E      		ld 		e,(hl) 							; load into DE
-80CC: 23      		inc 	hl
-80CD: 56      		ld 		d,(hl)
-80CE: 23      		inc 	hl
-80CF: EB      		ex 		de,hl 							; print it
-80D0: CD4681  		call 	PrintInteger
-80D3: EB      		ex 		de,hl
-80D4: 7C      		ld 		a,h 							; reached top of stack
-80D5: B7      		or 		a
-80D6: 20F3    		jr 		nz,__PSLoop
-80D8: D1      		pop 	de 								; restore DE
-80D9: 2E0D    		ld 		l,13 							; print CR
-80DB: CDE880  		call 	PrintCharL
-80DE: DDE9    		jp 		(ix)
+8151:         	WORD_PrintStack:							; <<.stack>>
+8151: D5      		push 	de 								; save DE
+8152: 210000  		ld 		hl,0  							; get SP into HL
+8155: 23      		inc 	hl 								; skip over PUSH DE above
+8156: 23      		inc 	hl
+8157: 39      		add 	hl,sp
+8158: 3E46    		ld  	a,46h 							; first yellow
+815A: 323C82  		ld 		(__PCAColour),a
+815D:         	__PSLoop:
+815D: 5E      		ld 		e,(hl) 							; load into DE
+815E: 23      		inc 	hl
+815F: 56      		ld 		d,(hl)
+8160: 23      		inc 	hl
+8161: EB      		ex 		de,hl 							; print it
+8162: CDE781  		call 	PrintInteger
+8165: EB      		ex 		de,hl
+8166: 3E44    		ld  	a,44h 							; remainder green
+8168: 323C82  		ld 		(__PCAColour),a
+816B: 7C      		ld 		a,h 							; reached top of stack
+816C: B7      		or 		a
+816D: 20EE    		jr 		nz,__PSLoop
+816F: D1      		pop 	de 								; restore DE
+8170: 2E0D    		ld 		l,13 							; print CR
+8172: CD8981  		call 	PrintCharL
+8175: DDE9    		jp 		(ix)
               	
-80E0:         	WORD_ClearScreen:							; <<cls>>
-80E0: CD6D81  		call 	ClearScreen
-80E3: CD8781  		call 	HomeCursor
-80E6: DDE9    		jp 		(ix)
+8177:         	WORD_ClearScreen:							; <<cls>>
+8177: CD0E82  		call 	ClearScreen
+817A: CD2882  		call 	HomeCursor
+817D: DDE9    		jp 		(ix)
+              	
+817F:         	WORD_CR:
+817F: FDE9    		jp 		(iy)
+8181: 2980    		defw 	Core_Literal
+8183: 0D00    		defw 	13
+8185: 4581    		defw 	WORD_Emit
+8187: 3180    		defw 	Core_Return
               	
               	; ****************************************************************************************************
               	;			This is included if io.asm is included, provides direct I/O to Speccy hardware
@@ -410,75 +565,75 @@
               	;
               	; ****************************************************************************************************
               	
-80E8:         	PrintCharL:
-80E8: F5      		push 	af 								; stack registers
-80E9: C5      		push 	bc 								
-80EA: D5      		push 	de
-80EB: E5      		push 	hl
+8189:         	PrintCharL:
+8189: F5      		push 	af 								; stack registers
+818A: C5      		push 	bc 								
+818B: D5      		push 	de
+818C: E5      		push 	hl
               	
-80EC: 7D      		ld 		a,l 							; check for CR ?
-80ED: FE0D    		cp 		13
-80EF: 2847    		jr		z,__PCLReturn
+818D: 7D      		ld 		a,l 							; check for CR ?
+818E: FE0D    		cp 		13
+8190: 2847    		jr		z,__PCLReturn
               	
-80F1: 0600    		ld 		b,0 							; B is the reversing byte
-80F3: CB7D    		bit 	7,l 							; if bit 7 set
-80F5: 2803    		jr 		z,__PCANotReverse
-80F7: 05      		dec 	b 								; B becomes $FF
-80F8: CBBD    		res 	7,l 							; drop bit 7
-80FA:         	__PCANotReverse:
-80FA: 2600    		ld 		h,0 							; HL to 16 bit
-80FC: ED5B9581		ld 		de,(__PCAFont)					; DE = Font Base
-8100: 29      		add 	hl,hl 							; calc Font Base + char * 8
-8101: 29      		add 	hl,hl
-8102: 29      		add 	hl,hl
-8103: 19      		add 	hl,de
-8104: EB      		ex 		de,hl 							; put in DE
-8105: 2A9781  		ld 		hl,(__PCAVideoPos) 				; get write address
-8108: E5      		push 	hl 								; save for later
-8109:         	_PCALoop:	
-8109: 1A      		ld 		a,(de) 							; read font char
-810A: A8      		xor 	b 								; reverse byte
-810B: 77      		ld 		(hl),a 							; write to screen
-810C: 1C      		inc 	e 								; bump pointers
-810D: 24      		inc 	h
-810E: 7C      		ld 		a,h 							; until done whole row
-810F: E607    		and 	7
-8111: 20F6    		jr 		nz,_PCALoop
+8192: 0600    		ld 		b,0 							; B is the reversing byte
+8194: CB7D    		bit 	7,l 							; if bit 7 set
+8196: 2803    		jr 		z,__PCANotReverse
+8198: 05      		dec 	b 								; B becomes $FF
+8199: CBBD    		res 	7,l 							; drop bit 7
+819B:         	__PCANotReverse:
+819B: 2600    		ld 		h,0 							; HL to 16 bit
+819D: ED5B3682		ld 		de,(__PCAFont)					; DE = Font Base
+81A1: 29      		add 	hl,hl 							; calc Font Base + char * 8
+81A2: 29      		add 	hl,hl
+81A3: 29      		add 	hl,hl
+81A4: 19      		add 	hl,de
+81A5: EB      		ex 		de,hl 							; put in DE
+81A6: 2A3882  		ld 		hl,(__PCAVideoPos) 				; get write address
+81A9: E5      		push 	hl 								; save for later
+81AA:         	_PCALoop:	
+81AA: 1A      		ld 		a,(de) 							; read font char
+81AB: A8      		xor 	b 								; reverse byte
+81AC: 77      		ld 		(hl),a 							; write to screen
+81AD: 1C      		inc 	e 								; bump pointers
+81AE: 24      		inc 	h
+81AF: 7C      		ld 		a,h 							; until done whole row
+81B0: E607    		and 	7
+81B2: 20F6    		jr 		nz,_PCALoop
               	
               	
-8113: ED5B9981		ld 		de,(__PCAAttribPos)				; copy colour byte to attribute memory.
-8117: 3A9B81  		ld 		a,(__PCAColour)
-811A: 12      		ld 		(de),a
-811B: 13      		inc 	de
+81B4: ED5B3A82		ld 		de,(__PCAAttribPos)				; copy colour byte to attribute memory.
+81B8: 3A3C82  		ld 		a,(__PCAColour)
+81BB: 12      		ld 		(de),a
+81BC: 13      		inc 	de
               	
-811C: E1      		pop 	hl 								; restore original video position to HL
-811D: 2C      		inc 	l 								; right one
-811E: 200C    		jr 		nz,__PCANotNewPage 				; if nz don't need new 1/4k page
-8120: 7C      		ld 		a,h 							; advance to next quarter page
-8121: C608    		add 	8
-8123: 67      		ld 		h,a 	
-8124: FE58    		cp 		0x58 							; we only have 3, this is the attribute page
-8126: 2004    		jr 		nz,__PCANotNewPage
-8128: 2640    		ld 		h,0x40 							; wrap round to top.
-812A: 1658    		ld 		d,0x58 							; reset attribute memory pointer
-812C:         	__PCANotNewPage:
-812C: 229781  		ld 		(__PCAVideoPos),hl 				; update new position in video / attr
-812F: ED539981		ld 		(__PCAAttribPos),de 			
+81BD: E1      		pop 	hl 								; restore original video position to HL
+81BE: 2C      		inc 	l 								; right one
+81BF: 200C    		jr 		nz,__PCANotNewPage 				; if nz don't need new 1/4k page
+81C1: 7C      		ld 		a,h 							; advance to next quarter page
+81C2: C608    		add 	8
+81C4: 67      		ld 		h,a 	
+81C5: FE58    		cp 		0x58 							; we only have 3, this is the attribute page
+81C7: 2004    		jr 		nz,__PCANotNewPage
+81C9: 2640    		ld 		h,0x40 							; wrap round to top.
+81CB: 1658    		ld 		d,0x58 							; reset attribute memory pointer
+81CD:         	__PCANotNewPage:
+81CD: 223882  		ld 		(__PCAVideoPos),hl 				; update new position in video / attr
+81D0: ED533A82		ld 		(__PCAAttribPos),de 			
               	
-8133:         	__PCLExit:
-8133: E1      		pop 	hl 								; destack.
-8134: D1      		pop 	de
-8135: C1      		pop 	bc
-8136: F1      		pop 	af
-8137: C9      		ret
+81D4:         	__PCLExit:
+81D4: E1      		pop 	hl 								; destack.
+81D5: D1      		pop 	de
+81D6: C1      		pop 	bc
+81D7: F1      		pop 	af
+81D8: C9      		ret
               	
-8138:         	__PCLReturn: 								; carriage return.
-8138: 2E20    		ld 		l,' '
-813A: CDE880  		call 	PrintCharL
-813D: 3A9781  		ld 		a,(__PCAVideoPos)
-8140: E61F    		and 	31
-8142: 20F4    		jr 		nz,__PCLReturn
-8144: 18ED    		jr 		__PCLExit
+81D9:         	__PCLReturn: 								; carriage return.
+81D9: 2E20    		ld 		l,' '
+81DB: CD8981  		call 	PrintCharL
+81DE: 3A3882  		ld 		a,(__PCAVideoPos)
+81E1: E61F    		and 	31
+81E3: 20F4    		jr 		nz,__PCLReturn
+81E5: 18ED    		jr 		__PCLExit
               	
               	; ****************************************************************************************************
               	;
@@ -486,16 +641,16 @@
               	;
               	; ****************************************************************************************************
               	
-8146:         	PrintInteger:
-8146: E5      		push 	hl
-8147: 2E20    		ld 		l,' ' 							; print leading space
-8149: CDE880  		call 	PrintCharL
-814C: E1      		pop 	hl
-814D: 7C      		ld 		a,h
-814E: CD5681  		call 	PrintByteA
-8151: 7D      		ld 		a,l
-8152: CD5681  		call 	PrintByteA
-8155: C9      		ret
+81E7:         	PrintInteger:
+81E7: E5      		push 	hl
+81E8: 2E20    		ld 		l,' ' 							; print leading space
+81EA: CD8981  		call 	PrintCharL
+81ED: E1      		pop 	hl
+81EE: 7C      		ld 		a,h
+81EF: CDF781  		call 	PrintByteA
+81F2: 7D      		ld 		a,l
+81F3: CDF781  		call 	PrintByteA
+81F6: C9      		ret
               	
               	; ****************************************************************************************************
               	;
@@ -503,24 +658,24 @@
               	;
               	; ****************************************************************************************************
               	
-8156:         	PrintByteA:
-8156: F5      		push 	af 								; save A on stack
-8157: 1F      		rra 									; shift right 4
-8158: 1F      		rra
-8159: 1F      		rra
-815A: 1F      		rra
-815B: CD5F81  		call	__PBANibble 					; print it
-815E: F1      		pop 	af 								; restore
-815F:         	__PBANibble:
-815F: F6F0    		or 		0F0h 							; DAA trick
-8161: 27      		daa
-8162: C6A0    		add 	a,0A0h
-8164: CE40    		adc 	a,040h
-8166: E5      		push 	hl 								; print character
-8167: 6F      		ld 		l,a
-8168: CDE880  		call 	PrintCharL
-816B: E1      		pop 	hl
-816C: C9      		ret
+81F7:         	PrintByteA:
+81F7: F5      		push 	af 								; save A on stack
+81F8: 1F      		rra 									; shift right 4
+81F9: 1F      		rra
+81FA: 1F      		rra
+81FB: 1F      		rra
+81FC: CD0082  		call	__PBANibble 					; print it
+81FF: F1      		pop 	af 								; restore
+8200:         	__PBANibble:
+8200: F6F0    		or 		0F0h 							; DAA trick
+8202: 27      		daa
+8203: C6A0    		add 	a,0A0h
+8205: CE40    		adc 	a,040h
+8207: E5      		push 	hl 								; print character
+8208: 6F      		ld 		l,a
+8209: CD8981  		call 	PrintCharL
+820C: E1      		pop 	hl
+820D: C9      		ret
               	
               	; ****************************************************************************************************
               	;	
@@ -528,25 +683,25 @@
               	;
               	; ****************************************************************************************************
               	
-816D:         	ClearScreen:
-816D: E5      		push 	hl
-816E: 210040  		ld 		hl,0x4000 						; fill 4000-57FF with zero
-8171:         	__CLSLoop1:
-8171: 3600    		ld 		(hl),0
-8173: 23      		inc 	hl
-8174: 7C      		ld 		a,h
-8175: FE58    		cp 		0x58
-8177: 20F8    		jr		nz,__CLSLoop1
-8179:         	__CLSLoop2:									; fill 5800-5FFF with 7 (white)
-8179: 3607    		ld 		(hl),7
-817B: 23      		inc 	hl
-817C: 7C      		ld 		a,h
-817D: FE60    		cp 		0x60
-817F: 20F8    		jr		nz,__CLSLoop2
-8181: 3E01    		ld 		a,1 							; set border to blue.
-8183: D3FE    		out 	(0xFE),a
-8185: E1      		pop 	hl
-8186: C9      		ret
+820E:         	ClearScreen:
+820E: E5      		push 	hl
+820F: 210040  		ld 		hl,0x4000 						; fill 4000-57FF with zero
+8212:         	__CLSLoop1:
+8212: 3600    		ld 		(hl),0
+8214: 23      		inc 	hl
+8215: 7C      		ld 		a,h
+8216: FE58    		cp 		0x58
+8218: 20F8    		jr		nz,__CLSLoop1
+821A:         	__CLSLoop2:									; fill 5800-5FFF with 7 (white)
+821A: 3607    		ld 		(hl),7
+821C: 23      		inc 	hl
+821D: 7C      		ld 		a,h
+821E: FE60    		cp 		0x60
+8220: 20F8    		jr		nz,__CLSLoop2
+8222: 3E01    		ld 		a,1 							; set border to blue.
+8224: D3FE    		out 	(0xFE),a
+8226: E1      		pop 	hl
+8227: C9      		ret
               	
               	; ****************************************************************************************************
               	;
@@ -554,23 +709,23 @@
               	;
               	; ****************************************************************************************************
               	
-8187:         	HomeCursor:	
-8187: E5      		push 	hl
-8188: 210058  		ld 		hl,0x5800 						; reset attribute pos
-818B: 229981  		ld 		(__PCAAttribPos),hl
-818E: 2640    		ld 		h,0x40 							; reset video pos
-8190: 229781  		ld 		(__PCAVideoPos),hl
-8193: E1      		pop 	hl
-8194: C9      		ret
+8228:         	HomeCursor:	
+8228: E5      		push 	hl
+8229: 210058  		ld 		hl,0x5800 						; reset attribute pos
+822C: 223A82  		ld 		(__PCAAttribPos),hl
+822F: 2640    		ld 		h,0x40 							; reset video pos
+8231: 223882  		ld 		(__PCAVideoPos),hl
+8234: E1      		pop 	hl
+8235: C9      		ret
               	
-8195:         	__PCAFont: 									; font base here
-8195: 003C    		defw 	0x3C00
-8197:         	__PCAVideoPos: 								; current video memory pointer.
-8197: 0040    		defw 	VideoMemory
-8199:         	__PCAAttribPos:								; current attribute pointer
-8199: 0058    		defw 	AttributeMemory
-819B:         	__PCAColour: 								; current colour to use
-819B: 44      		defb 	0x44
+8236:         	__PCAFont: 									; font base here
+8236: 003C    		defw 	0x3C00
+8238:         	__PCAVideoPos: 								; current video memory pointer.
+8238: 0040    		defw 	VideoMemory
+823A:         	__PCAAttribPos:								; current attribute pointer
+823A: 0058    		defw 	AttributeMemory
+823C:         	__PCAColour: 								; current colour to use
+823C: 44      		defb 	0x44
               		include "library/misc.asm"
               	; ****************************************************************************************************
               	;
@@ -578,38 +733,40 @@
               	;
               	; ****************************************************************************************************
               	
-819C:         	WORD_Stop:									; <<stop>>
-819C: 18FE    		jr 		WORD_Stop
+823D:         	WORD_Stop:									; <<stop>>
+823D: 18FE    		jr 		WORD_Stop
               	
               	
               	
-819E:         	BootWord:
-819E: FDE9    		jp 			(iy)
-81A0: E080    		defw 		WORD_ClearScreen
-81A2: BC81    		defw 		WORD_Star
-81A4: BC81    		defw 		WORD_Star
-81A6: BC81    		defw 		WORD_Star
+823F:         	BootWord:
+823F: FDE9    		jp 			(iy)
+8241: 7781    		defw 		WORD_ClearScreen
+8243: 6382    		defw 		WORD_Star
+8245: 6382    		defw 		WORD_Star
+8247: 6382    		defw 		WORD_Star
+8249: 7F81    		defw 		WORD_CR
               	
-81A8: 2980    		defw 		Core_Literal
-81AA: 0100    		defw 		1
-81AC: 2980    		defw 		Core_Literal
-81AE: 0200    		defw 		2
-81B0: 2980    		defw 		Core_Literal
-81B2: 0300    		defw 		3
-81B4: 2980    		defw 		Core_Literal
-81B6: 0400    		defw 		4
-              		
-81B8: C480    		defw 		WORD_PrintStack
-81BA: 9C81    		defw 		WORD_Stop
+824B: 2980    		defw 		Core_Literal
+824D: 0100    		defw 		1
+824F: 2980    		defw 		Core_Literal
+8251: 0200    		defw 		2
+8253: 2980    		defw 		Core_Literal
+8255: 0300    		defw 		3
+8257: 2980    		defw 		Core_Literal
+8259: 0400    		defw 		4
+825B: 5181    		defw 		WORD_PrintStack
+825D: 3C81    		defw		WORD_Over
+825F: 5181    		defw 		WORD_PrintStack
+8261: 3D82    		defw 		WORD_Stop
               	
-81BC:         	WORD_Star:
-81BC: FDE9    		jp 			(iy)
-81BE: 2980    		defw 		Core_Literal
-81C0: 2A00    		defw 		42
-81C2: B880    		defw 		WORD_Emit
-81C4: 3180    		defw 		Core_Return
+8263:         	WORD_Star:
+8263: FDE9    		jp 			(iy)
+8265: 2980    		defw 		Core_Literal
+8267: 2A00    		defw 		42
+8269: 4581    		defw 		WORD_Emit
+826B: 3180    		defw 		Core_Return
               	
-81C6:         	EndOfCode:
+826D:         	EndOfCode:
               	
               	; ****************************************************************************************************
               	;
@@ -647,5 +804,5 @@
               	
 
 
-total time: 0.0033 sec.
+total time: 0.0014 sec.
 no errors

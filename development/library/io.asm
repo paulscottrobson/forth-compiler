@@ -20,6 +20,8 @@ WORD_PrintStack:							; <<.stack>>
 	inc 	hl 								; skip over PUSH DE above
 	inc 	hl
 	add 	hl,sp
+	ld  	a,46h 							; first yellow
+	ld 		(__PCAColour),a
 __PSLoop:
 	ld 		e,(hl) 							; load into DE
 	inc 	hl
@@ -28,6 +30,8 @@ __PSLoop:
 	ex 		de,hl 							; print it
 	call 	PrintInteger
 	ex 		de,hl
+	ld  	a,44h 							; remainder green
+	ld 		(__PCAColour),a
 	ld 		a,h 							; reached top of stack
 	or 		a
 	jr 		nz,__PSLoop
@@ -40,6 +44,13 @@ WORD_ClearScreen:							; <<cls>>
 	call 	ClearScreen
 	call 	HomeCursor
 	jp 		(ix)
+
+WORD_CR:									; <<cr>>
+	jp 		(iy)
+	defw 	Core_Literal
+	defw 	13
+	defw 	WORD_Emit
+	defw 	Core_Return
 
 ; ****************************************************************************************************
 ;			This is included if io.asm is included, provides direct I/O to Speccy hardware
