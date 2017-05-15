@@ -6,7 +6,7 @@
 
 	include 	"sna_header.asm"			; .SNA boot header
 	include 	"core4.asm" 				; Forth core (Direct Threaded)
-	include 	"library.asm" 				; Basic FORTH words
+	include 	"library.asm" 				; Basic FORTH words including optional text/sprite stuff
 
 BootWord:
 	jp 			(iy)
@@ -17,17 +17,23 @@ BootWord:
 	defw 		WORD_CR
 
 	defw 		Core_Literal
-	defw 		1
+	defw 		0x11
 	defw 		Core_Literal
-	defw 		2
+	defw 		0x22
 	defw 		Core_Literal
-	defw 		3
-	defw 		Core_Literal
-	defw 		4
+	defw 		0x33
+
 	defw 		WORD_PrintStack
-	defw		WORD_Over
+	defw 		TestR
 	defw 		WORD_PrintStack
 	defw 		WORD_Stop
+
+TestR:
+	jp 			(iy)
+	defw 		WORD_RStoDS
+	defw 		WORD_PrintStack
+	defw 		WORD_DStoRS
+	defw 		Core_Return
 
 WORD_Star:
 	jp 			(iy)

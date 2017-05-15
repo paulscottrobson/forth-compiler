@@ -32,3 +32,25 @@ WORD_Over:									; <<over>>
 	push 	de 								; with tos 2 on top
 	exx
 	jp 		(ix)
+
+WORD_Rot:									; <<rot>>
+	exx
+	pop 	hl 								; X3  X1 X2 X3 -> X2 X3 X1
+	pop 	de 								; X2 
+	pop		bc 								; X1
+	push 	de
+	push 	hl
+	push 	bc
+	exx
+	jp 		(ix)
+
+WORD_Pick:									; <<pick>>
+	exx 		
+	pop 	hl 								; get the index off the stack
+	add 	hl,sp 							; add stack offset
+	ld 		d,(hl) 							; read stack value
+	inc 	hl
+	ld 		e,(hl)
+	push 	de 								; push on the stack
+	exx
+	jp 		(ix)

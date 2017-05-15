@@ -60,10 +60,11 @@ WORD_Sgn:									; <<sgn>>
 ;
 ; ****************************************************************************************************
 
+WORD_OnePlus:
 	pop		hl								; <<1+>>
 	jr 		__OnePlus
 
-WORD_TwoPlus
+WORD_TwoPlus:
 	pop		hl								; <<2+>>
 	inc 	hl
 __OnePlus:	
