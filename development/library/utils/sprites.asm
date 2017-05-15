@@ -1,7 +1,12 @@
 ; ****************************************************************************************************
 ; ****************************************************************************************************
 ;
-;										16x16 Sprite Routines
+;										16 x n Sprite Routines
+;
+;	Sprites can be either simple XOR, Masked AND/XOR or they can preserve their background data.
+;
+;	There is some self modifying code here - the pointers are all kept in SMC, so is the counter
+;	and it is also used to modify the 24 bit shifter.
 ;
 ; ****************************************************************************************************
 ; ****************************************************************************************************
@@ -19,19 +24,78 @@
 DrawSprite:
 	ld 		ix,testSprite
 
+;
+;	Set up vertical count,graphic data, mask data, backup store data, screen position
+;
+
+; ****************************************************************************************************
+;					Set up the pixel shifter for the 3 LSB of the x coordinate
+; ****************************************************************************************************
+
+	ld 		a,(ix+0) 						; x 0-7 pixels
+	and 	7
+	jr 		z,__DSOffsetDone 				; if zero, the JR will just fall through to register move
+	dec 	a
+	add 	a,a	
+	add 	__DSShiftEntry-__DSShiftAHL-2
+__DSOffsetDone:
+	ld 		(__DSShiftAHL+1),a 				; set the JR offset.
+
+
 	ld 		hl,(__DSLoadScreenAddress+1)
 	dec		h 								; temp for checking.
 	dec 	h
 	ld 		(hl),$FF
 
 __DSMainLoop:
+;
+;	Copy to backstorage [TODO]
+;
+
+; ****************************************************************************************************
+;						Mask the graphic mask onto the screen, if it is in use
+; ****************************************************************************************************
+
+__DSLoadMaskAddress:
+	ld 		hl,maskData 					; mask data address
+	ld 		a,h
+	or 		l 								; if mask address is zero, then don't do the mask.
+	jr 		z,__DSXorGraphic
+
+	ld 		d,(hl) 							; read mask into DE
+	inc 	hl
+	ld 		e,(hl)
+	inc 	hl
+	ld 		(__DSLoadMaskAddress+1),hl 		; update the mask data address
+
+	ex 		de,hl 							; 16 bit now in HL.
+	xor  	a 								; 24 bit graphic in AHL
+	call 	__DSShiftAHL					; shift it accordingly
+	ex 		de,hl 							; now it is in ADE
 
 __DSLoadScreenAddress:
-	ld 		hl,4A12h
+	ld 		hl,4A12h						; where we will mask
 
-;
-;	XOR the graphic data into the screen
-;
+	cpl 									; mask the ADE bytes - 1's complement each and AND into screen
+	and		(hl)
+	ld 		(hl),a
+	inc 	l
+	ld 		a,d
+	cpl
+	and		(hl)
+	ld 		(hl),a
+	inc 	l
+	ld 		a,e
+	cpl
+	and 	(hl)
+	ld 		(hl),a
+
+
+; ****************************************************************************************************
+;								XOR the graphic data into the screen
+; ****************************************************************************************************
+__DSXorGraphic:
+
 __DSLoadGraphicData:
 	ld 		hl,graphicData 					; pointer to graphic data (modified in-line)
 	ld 		d,(hl) 							; read into DE
@@ -48,7 +112,7 @@ __DSLoadGraphicData:
 	ex 		de,hl 							; now it is in ADE
 	ld 		hl,(__DSLoadScreenAddress+1) 	; HL is where it is XORed into.
 
-	xor 	(hl) 							; XOR those three bytes in.
+	xor 	(hl) 							; XOR those three bytes in to the screen
 	ld 		(hl),a
 	inc 	l
 	ld 		a,d
@@ -58,11 +122,13 @@ __DSLoadGraphicData:
 	ld 		a,e
 	xor 	(hl)
 	ld 		(hl),a
-	dec 	l 								; unpick the increment
+	dec 	l 								; unpick the increment so HL points to the first byte
 	dec 	l
-;
-;	Move to the next line down
-;
+
+; ****************************************************************************************************
+;										Move to the next line down
+; ****************************************************************************************************
+
 	call 	__DSHLDown 						; HL Down one line
 	ld 		a,h
 	cp 		58h								; into attribute memory ?
@@ -83,9 +149,11 @@ Stop:
 	jr 		Stop
 	ret
 
+; ****************************************************************************************************
 ;
-;	Advance the line down by 1, handles the slightly odd screen arrangement
+;		Advance the line address HL down by 1, handles the slightly odd screen arrangement
 ;
+; ****************************************************************************************************
 __DSHLDown:
 	inc 	h 								; next line down.
 	ld 		a,h 							; have we stepped over the border
@@ -105,11 +173,16 @@ __DSHLDown:
 	add 	8
 	ld 		h,a
 	ret
+
+; ****************************************************************************************************
 ;
-;	Shift the 24 bit value AHL left a number of times defined by the x coordinate
+;	Shift the 24 bit value AHL left a number of times defined by the x coordinate, set up at the
+;	start of the drawing routine.
 ;
+; ****************************************************************************************************
+
 __DSShiftAHL:
-	jr 		__DSShiftEntry+2*2
+	jr 		__DSShiftEntry 					; this jump vector is zero if x % 8 = 0, otherwise it jumps into code below to shift
 	ld 		a,h
 	ld 		h,l
 	ld 		l,0
@@ -124,6 +197,7 @@ __DSShiftEntry:
 	adc 	a,a
 	add 	hl,hl
 	adc 	a,a
+
 	add 	hl,hl
 	adc 	a,a
 	add 	hl,hl
@@ -133,7 +207,7 @@ __DSShiftEntry:
 	ret
 
 testSprite:
-	defb 	2
+	defb 	7
 	defb 	4
 	defb 	8
 	defb 	8

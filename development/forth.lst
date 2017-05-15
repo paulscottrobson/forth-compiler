@@ -1,6 +1,6 @@
               	; --------------------------------------
               	; zasm: assemble "forth.asm"
-              	; date: 2017-05-15 15:34:18
+              	; date: 2017-05-15 17:08:40
               	; --------------------------------------
 
 
@@ -93,9 +93,9 @@
               	; ****************************************************************************************************
               	
 8000:         	BootAddress:
-8000: 3183    		defw 	BootWord 						; start of threaded word.
+8000: 6083    		defw 	BootWord 						; start of threaded word.
 8002:         	FreeAddress:
-8002: 5083    		defw 	EndOfCode 						; end of code that is built with the assembler.
+8002: 7F83    		defw 	EndOfCode 						; end of code that is built with the assembler.
               	
               	; ****************************************************************************************************
               	;
@@ -825,177 +825,231 @@
               	;
               	
 8281:         	DrawSprite:
-8281: DD21ED82		ld 		ix,testSprite
-              	
-8285: 2A8D82  		ld 		hl,(__DSLoadScreenAddress+1)
-8288: 25      		dec		h 								; temp for checking.
-8289: 25      		dec 	h
-828A: 36FF    		ld 		(hl),$FF
-              	
-828C:         	__DSMainLoop:
-              	
-828C:         	__DSLoadScreenAddress:
-828C: 21124A  		ld 		hl,4A12h
+8281: DD211C83		ld 		ix,testSprite
               	
               	
-828F:         	__DSLoadGraphicData:
-828F: 211D83  		ld 		hl,graphicData 					; pointer to graphic data (modified in-line)
-8292: 56      		ld 		d,(hl) 							; read into DE
-8293: 23      		inc 	hl
-8294: 5E      		ld 		e,(hl)
-8295: 23      		inc 	hl
-8296: 229082  		ld 		(__DSLoadGraphicData+1),hl 		; update graphic data pointer
+              	; ****************************************************************************************************
+              	;					Set up the pixel shifter for the 3 LSB of the x coordinate
+              	; ****************************************************************************************************
               	
-8299: EB      		ex 		de,hl 							; 16 bit now in HL.
-829A: AF      		xor  	a 								; 24 bit graphic in AHL
-              	
-829B: CDD782  		call 	__DSShiftAHL					; shift it accordingly
-              	
-829E: EB      		ex 		de,hl 							; now it is in ADE
-829F: 2A8D82  		ld 		hl,(__DSLoadScreenAddress+1) 	; HL is where it is XORed into.
-              	
-82A2: AE      		xor 	(hl) 							; XOR those three bytes in.
-82A3: 77      		ld 		(hl),a
-82A4: 2C      		inc 	l
-82A5: 7A      		ld 		a,d
-82A6: AE      		xor 	(hl)
-82A7: 77      		ld 		(hl),a
-82A8: 2C      		inc 	l
-82A9: 7B      		ld 		a,e
-82AA: AE      		xor 	(hl)
-82AB: 77      		ld 		(hl),a
-              	
-82AC: 2D      		dec 	l 								; unpick the increment
-82AD: 2D      		dec 	l
-82AE: CDC482  		call 	__DSHLDown 						; HL Down one line
-82B1: 7C      		ld 		a,h
-82B2: FE58    		cp 		58h								; into attribute memory ?
-82B4: 280B    		jr 		z,__DSExitEarly 				; off bottom of screen, end of sprite draw
-              	
-82B6:         	__DSNoOverflowScreen1
-82B6: 228D82  		ld 		(__DSLoadScreenAddress+1),hl 	; update the screen address.
-              	
-82B9:         	__DSLoadVerticalCount:
-82B9: 3E0A    		ld 		a,10 							; count of lines to do
-82BB: 3D      		dec 	a 								; decrement and update
-82BC: 32BA82  		ld 		(__DSLoadVerticalCount+1),a 	
-82BF: 20CB    		jr 		nz,__DSMainLoop 				; keep going till done all lines, or reached the end of screen memory
-82C1:         	__DSExitEarly:
+8285: DD7E00  		ld 		a,(ix+0) 						; x 0-7 pixels
+8288: E607    		and 	7
+828A: 2804    		jr 		z,__DSOffsetDone 				; if zero, the JR will just fall through to register move
+828C: 3D      		dec 	a
+828D: 87      		add 	a,a	
+828E: C605    		add 	__DSShiftEntry-__DSShiftAHL-2
+8290:         	__DSOffsetDone:
+8290: 320783  		ld 		(__DSShiftAHL+1),a 				; set the JR offset.
               	
               	
+8293: 2AAF82  		ld 		hl,(__DSLoadScreenAddress+1)
+8296: 25      		dec		h 								; temp for checking.
+8297: 25      		dec 	h
+8298: 36FF    		ld 		(hl),$FF
+              	
+829A:         	__DSMainLoop:
+              	;
+              	;	Copy to backstorage [TODO]
+              	;
+              	
+              	; ****************************************************************************************************
+              	;						Mask the graphic mask onto the screen, if it is in use
+              	; ****************************************************************************************************
+829A:         	__DSLoadMaskAddress:
+829A: 214C83  		ld 		hl,maskData 					; mask data address
+829D: 7C      		ld 		a,h
+829E: B5      		or 		l 								; if mask address is zero, then don't do the mask.
+829F: 281D    		jr 		z,__DSXorGraphic
+              	
+82A1: 56      		ld 		d,(hl) 							; read mask into DE
+82A2: 23      		inc 	hl
+82A3: 5E      		ld 		e,(hl)
+82A4: 23      		inc 	hl
+82A5: 229B82  		ld 		(__DSLoadMaskAddress+1),hl 		; update the mask data address
+82A8: EB      		ex 		de,hl 							; 16 bit now in HL.
+82A9: AF      		xor  	a 								; 24 bit graphic in AHL
+82AA: CD0683  		call 	__DSShiftAHL					; shift it accordingly
+82AD: EB      		ex 		de,hl 							; now it is in ADE
+82AE:         	__DSLoadScreenAddress:
+82AE: 21124A  		ld 		hl,4A12h						; where we will mask
+              	
+82B1: 2F      		cpl 									; mask the ADE bytes - 1's complement each and AND into screen
+82B2: A6      		and		(hl)
+82B3: 77      		ld 		(hl),a
+82B4: 2C      		inc 	l
+82B5: 7A      		ld 		a,d
+82B6: 2F      		cpl
+82B7: A6      		and		(hl)
+82B8: 77      		ld 		(hl),a
+82B9: 2C      		inc 	l
+82BA: 7B      		ld 		a,e
+82BB: 2F      		cpl
+82BC: A6      		and 	(hl)
+82BD: 77      		ld 		(hl),a
               	
               	
+              	; ****************************************************************************************************
+              	;								XOR the graphic data into the screen
+              	; ****************************************************************************************************
+82BE:         	__DSXorGraphic:
               	
-82C1:         	Stop:
-82C1: 18FE    		jr 		Stop
-82C3: C9      		ret
+82BE:         	__DSLoadGraphicData:
+82BE: 213883  		ld 		hl,graphicData 					; pointer to graphic data (modified in-line)
+82C1: 56      		ld 		d,(hl) 							; read into DE
+82C2: 23      		inc 	hl
+82C3: 5E      		ld 		e,(hl)
+82C4: 23      		inc 	hl
+82C5: 22BF82  		ld 		(__DSLoadGraphicData+1),hl 		; update graphic data pointer
+              	
+82C8: EB      		ex 		de,hl 							; 16 bit now in HL.
+82C9: AF      		xor  	a 								; 24 bit graphic in AHL
+              	
+82CA: CD0683  		call 	__DSShiftAHL					; shift it accordingly
+              	
+82CD: EB      		ex 		de,hl 							; now it is in ADE
+82CE: 2AAF82  		ld 		hl,(__DSLoadScreenAddress+1) 	; HL is where it is XORed into.
+              	
+82D1: AE      		xor 	(hl) 							; XOR those three bytes in.
+82D2: 77      		ld 		(hl),a
+82D3: 2C      		inc 	l
+82D4: 7A      		ld 		a,d
+82D5: AE      		xor 	(hl)
+82D6: 77      		ld 		(hl),a
+82D7: 2C      		inc 	l
+82D8: 7B      		ld 		a,e
+82D9: AE      		xor 	(hl)
+82DA: 77      		ld 		(hl),a
+82DB: 2D      		dec 	l 								; unpick the increment
+82DC: 2D      		dec 	l
+              	;
+              	;	Move to the next line down
+              	;
+82DD: CDF382  		call 	__DSHLDown 						; HL Down one line
+82E0: 7C      		ld 		a,h
+82E1: FE58    		cp 		58h								; into attribute memory ?
+82E3: 280B    		jr 		z,__DSExitEarly 				; off bottom of screen, end of sprite draw
+              	
+82E5:         	__DSNoOverflowScreen1
+82E5: 22AF82  		ld 		(__DSLoadScreenAddress+1),hl 	; update the screen address.
+              	
+82E8:         	__DSLoadVerticalCount:
+82E8: 3E0A    		ld 		a,10 							; count of lines to do
+82EA: 3D      		dec 	a 								; decrement and update
+82EB: 32E982  		ld 		(__DSLoadVerticalCount+1),a 	
+82EE: 20AA    		jr 		nz,__DSMainLoop 				; keep going till done all lines, or reached the end of screen memory
+82F0:         	__DSExitEarly:
+              	
+              	
+82F0:         	Stop:
+82F0: 18FE    		jr 		Stop
+82F2: C9      		ret
+              	
               	;
               	;	Advance the line down by 1, handles the slightly odd screen arrangement
               	;
-82C4:         	__DSHLDown:
-82C4: 24      		inc 	h 								; next line down.
-82C5: 7C      		ld 		a,h 							; have we stepped over the border
-82C6: E607    		and 	7
-82C8: C0      		ret 	nz
+82F3:         	__DSHLDown:
+82F3: 24      		inc 	h 								; next line down.
+82F4: 7C      		ld 		a,h 							; have we stepped over the border
+82F5: E607    		and 	7
+82F7: C0      		ret 	nz
               	
-82C9: 7C      		ld 		a,h 							; fix up three lower bits of high address byte
-82CA: D608    		sub 	8
-82CC: 67      		ld 		h,a
+82F8: 7C      		ld 		a,h 							; fix up three lower bits of high address byte
+82F9: D608    		sub 	8
+82FB: 67      		ld 		h,a
               	
-82CD: 7D      		ld 		a,l 							; next block of 8 down, high 3 bits of low address byte
-82CE: C620    		add 	32
-82D0: 6F      		ld 		l,a
-82D1: D0      		ret		nc
+82FC: 7D      		ld 		a,l 							; next block of 8 down, high 3 bits of low address byte
+82FD: C620    		add 	32
+82FF: 6F      		ld 		l,a
+8300: D0      		ret		nc
               	
-82D2: 7C      		ld 		a,h 							; next page down.
-82D3: C608    		add 	8
-82D5: 67      		ld 		h,a
-82D6: C9      		ret
+8301: 7C      		ld 		a,h 							; next page down.
+8302: C608    		add 	8
+8304: 67      		ld 		h,a
+8305: C9      		ret
               	;
               	;	Shift the 24 bit value AHL left a number of times defined by the x coordinate
               	;
-82D7:         	__DSShiftAHL:
-82D7: 1809    		jr 		__DSShiftEntry+2*2
-82D9: 7C      		ld 		a,h
-82DA: 65      		ld 		h,l
-82DB: 2E00    		ld 		l,0
-82DD: C9      		ret
+8306:         	__DSShiftAHL:
+8306: 1805    		jr 		__DSShiftEntry
+8308: 7C      		ld 		a,h
+8309: 65      		ld 		h,l
+830A: 2E00    		ld 		l,0
+830C: C9      		ret
               	
-82DE:         	__DSShiftEntry:
-82DE: 29      		add 	hl,hl 							; the JR at __DSShiftEntry jumps into this code.
-82DF: 8F      		adc 	a,a
-82E0: 29      		add 	hl,hl
-82E1: 8F      		adc 	a,a
-82E2: 29      		add 	hl,hl
-82E3: 8F      		adc 	a,a
-82E4: 29      		add 	hl,hl
-82E5: 8F      		adc 	a,a
-82E6: 29      		add 	hl,hl
-82E7: 8F      		adc 	a,a
-82E8: 29      		add 	hl,hl
-82E9: 8F      		adc 	a,a
-82EA: 29      		add 	hl,hl
-82EB: 8F      		adc 	a,a
-82EC: C9      		ret
+830D:         	__DSShiftEntry:
+830D: 29      		add 	hl,hl 							; the JR at __DSShiftEntry jumps into this code.
+830E: 8F      		adc 	a,a
+830F: 29      		add 	hl,hl
+8310: 8F      		adc 	a,a
+8311: 29      		add 	hl,hl
+8312: 8F      		adc 	a,a
+8313: 29      		add 	hl,hl
+8314: 8F      		adc 	a,a
               	
-82ED:         	testSprite:
-82ED: 02      		defb 	2
-82EE: 04      		defb 	4
-82EF: 08      		defb 	8
-82F0: 08      		defb 	8
+8315: 29      		add 	hl,hl
+8316: 8F      		adc 	a,a
+8317: 29      		add 	hl,hl
+8318: 8F      		adc 	a,a
+8319: 29      		add 	hl,hl
+831A: 8F      		adc 	a,a
+831B: C9      		ret
               	
+831C:         	testSprite:
+831C: 07      		defb 	7
+831D: 04      		defb 	4
+831E: 08      		defb 	8
+831F: 08      		defb 	8
               	
-82F1:         	backStore:
-82F1: 00000000		defs 	8*3
-82F5: 00...   	
+8320:         	backStore:
+8320: 00000000		defs 	8*3
+8324: 00...   	
               	
-8309: FFFF    		defb 	0FFh,0FFh
-830B: 8001    		defb 	080h,001h
-830D: 8003    		defb 	080h,003h
-830F: 8007    		defb 	080h,007h
-8311: 8F0F    		defb 	08Fh,00Fh
-8313: 801F    		defb 	080h,01Fh
-8315: FFE0    		defb 	0FFh,0E0h
-8317: 0200    		defb 	002h,000h
-8319: 0200    		defb 	002h,000h
-831B: 0700    		defb 	007h,000h
+8338:         	graphicData:
+8338: FFFF    		defb 	0FFh,0FFh
+833A: 8001    		defb 	080h,001h
+833C: 8003    		defb 	080h,003h
+833E: 8007    		defb 	080h,007h
+8340: 8F0F    		defb 	08Fh,00Fh
+8342: 801F    		defb 	080h,01Fh
+8344: FFE0    		defb 	0FFh,0E0h
+8346: 0200    		defb 	002h,000h
+8348: 0200    		defb 	002h,000h
+834A: 0700    		defb 	007h,000h
               	
-831D:         	graphicData:
-831D:         	maskData:
-831D: 0180    		defb 	001h,080h
-831F: 03C0    		defb 	003h,0C0h
-8321: 07E0    		defb 	007h,0E0h
-8323: 0FF0    		defb 	00Fh,0F0h
-8325: 1FF8    		defb 	01Fh,0F8h
-8327: 3FFC    		defb 	03Fh,0FCh
-8329: 7FFE    		defb 	07Fh,0FEh
-832B: FFFF    		defb 	0FFh,0FFh
-832D: 0180    		defb 	001h,080h
-832F: FFFF    		defb 	0FFh,0FFh
-              		
+834C:         	maskData:
+834C: 0180    		defb 	001h,080h
+834E: 03C0    		defb 	003h,0C0h
+8350: 07E0    		defb 	007h,0E0h
+8352: 0FF0    		defb 	00Fh,0F0h
+8354: 1FF8    		defb 	01Fh,0F8h
+8356: 3FFC    		defb 	03Fh,0FCh
+8358: 7FFE    		defb 	07Fh,0FEh
+835A: FFFF    		defb 	0FFh,0FFh
+835C: 0180    		defb 	001h,080h
+835E: FFFF    		defb 	0FFh,0FFh
               	
-8331:         	BootWord:
-8331: FDE9    		jp 			(iy)
-8333: BB81    		defw 		WORD_ClearScreen
-8335: 4683    		defw 		WORD_Star
-8337: 3D83    		defw 		Test
-8339: 4683    		defw 		WORD_Star
-833B: 7181    		defw 		WORD_Stop
+8360:         	BootWord:
+8360: FDE9    		jp 			(iy)
+8362: BB81    		defw 		WORD_ClearScreen
+8364: 7583    		defw 		WORD_Star
+8366: 6C83    		defw 		Test
+8368: 7583    		defw 		WORD_Star
+836A: 7181    		defw 		WORD_Stop
               	
-833D:         	Test:
-833D: DDE5    		push 		ix
-833F: CD8182  		call 		DrawSprite
-8342: DDE1    		pop 		ix
-8344: DDE9    		jp 			(ix)
+836C:         	Test:
+836C: DDE5    		push 		ix
+836E: CD8182  		call 		DrawSprite
+8371: DDE1    		pop 		ix
+8373: DDE9    		jp 			(ix)
               	
-8346:         	WORD_Star:
-8346: FDE9    		jp 			(iy)
-8348: 2980    		defw 		Core_Literal
-834A: 2A00    		defw 		42
-834C: 8981    		defw 		WORD_Emit
-834E: 3180    		defw 		Core_Return
+8375:         	WORD_Star:
+8375: FDE9    		jp 			(iy)
+8377: 2980    		defw 		Core_Literal
+8379: 2A00    		defw 		42
+837B: 8981    		defw 		WORD_Emit
+837D: 3180    		defw 		Core_Return
               	
-8350:         	EndOfCode:
+837F:         	EndOfCode:
               	
               	; ****************************************************************************************************
               	;
@@ -1033,5 +1087,5 @@
               	
 
 
-total time: 0.0033 sec.
+total time: 0.0019 sec.
 no errors
