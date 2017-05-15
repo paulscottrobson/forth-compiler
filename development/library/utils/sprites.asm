@@ -10,10 +10,11 @@
 ;
 ; ****************************************************************************************************
 ; ****************************************************************************************************
-
+;	
+;	IX points to the sprite data, as follows.
 ;
-;	+0 			X position
-;	+1 			Y position
+;	+0 			X position (0-255)
+;	+1 			Y position (0-191)
 ;	+2 			Vertical Size (bits 0..6)
 ;	+3 			Drawing color (0 = don't do attribute)
 ;	+4,5 		pointer to 16 bit pixel data 
@@ -25,8 +26,28 @@ DrawSprite:
 	ld 		ix,testSprite
 
 ;
-;	Set up vertical count,graphic data, mask data, backup store data, screen position
+;	Set up  screen position : TODO
 ;
+
+; ****************************************************************************************************
+;						Copy structure details into the self modifying code
+; ****************************************************************************************************
+
+	ld 			a,(ix+2)					; vertical size
+	and 		7Fh
+	ld 			(__DSLoadVerticalCount+1),a
+
+	ld 			l,(ix+4)					; graphic data
+	ld 			h,(ix+5)
+	ld 			(__DSLoadGraphicData+1),hl
+
+	ld 			l,(ix+6)					; background store
+	ld 			h,(ix+7)
+	ld 			(__DSLoadStoreAddress+1),hl
+
+	ld 			l,(ix+8)					; mask data
+	ld 			h,(ix+9)
+	ld 			(__DSLoadMaskAddress+1),hl
 
 ; ****************************************************************************************************
 ;					Set up the pixel shifter for the 3 LSB of the x coordinate
@@ -41,23 +62,50 @@ DrawSprite:
 __DSOffsetDone:
 	ld 		(__DSShiftAHL+1),a 				; set the JR offset.
 
+; ****************************************************************************************************
+;								Copy the starting screen position
+; ****************************************************************************************************
 
-	ld 		hl,(__DSLoadScreenAddress+1)
-	dec		h 								; temp for checking.
-	dec 	h
-	ld 		(hl),$FF
+	ld 		hl,(__DSLoadStoreAddress+1) 	; get where we are copying old screen data to
+	ld 		a,h
+	or 		l
+	jr 		z,__DSMainLoop
+	ld 		de,(__DSLoadScreenAddress+1)	; this is where we copy stuff to on the screen
+	ld 		(hl),e 							; copy that address into the first 2 bytes of store address
+	inc 	hl
+	ld 		(hl),d
+	inc 	hl
+	ld 		(__DSLoadStoreAddress+1),hl 	; write it back
+
+; ****************************************************************************************************
+;   						   S P R I T E     M A I N     L O O P
+; ****************************************************************************************************
 
 __DSMainLoop:
-;
-;	Copy to backstorage [TODO]
-;
+
+; ****************************************************************************************************
+;						Copy current screen address to storage if it exists
+; ****************************************************************************************************
+
+__DSLoadStoreAddress:
+	ld 		de,0 							; look at back storage
+	ld 		a,d 							; if zero, then we don't copy out.
+	or 		e
+	jr 		z,__DSMaskGraphicOutline
+	ld 		hl,(__DSLoadScreenAddress+1) 	; HL = source DE = target
+	ldi 									; copy three bytes. 
+	ldi
+	ldi
+	ld 		(__DSLoadStoreAddress+1),de 	; save the new target address, 3 bytes on.
 
 ; ****************************************************************************************************
 ;						Mask the graphic mask onto the screen, if it is in use
 ; ****************************************************************************************************
 
+__DSMaskGraphicOutline:
+
 __DSLoadMaskAddress:
-	ld 		hl,maskData 					; mask data address
+	ld 		hl,0 							; mask data address
 	ld 		a,h
 	or 		l 								; if mask address is zero, then don't do the mask.
 	jr 		z,__DSXorGraphic
@@ -74,7 +122,7 @@ __DSLoadMaskAddress:
 	ex 		de,hl 							; now it is in ADE
 
 __DSLoadScreenAddress:
-	ld 		hl,4A12h						; where we will mask
+	ld 		hl,4A12h						; where we will write on the screen
 
 	cpl 									; mask the ADE bytes - 1's complement each and AND into screen
 	and		(hl)
@@ -97,7 +145,7 @@ __DSLoadScreenAddress:
 __DSXorGraphic:
 
 __DSLoadGraphicData:
-	ld 		hl,graphicData 					; pointer to graphic data (modified in-line)
+	ld 		hl,0 							; pointer to graphic data (modified in-line)
 	ld 		d,(hl) 							; read into DE
 	inc 	hl
 	ld 		e,(hl)
@@ -144,9 +192,7 @@ __DSLoadVerticalCount:
 	jr 		nz,__DSMainLoop 				; keep going till done all lines, or reached the end of screen memory
 __DSExitEarly:
 
-
-Stop:
-	jr 		Stop
+;	call 	__DSRestoreSavedScreen
 	ret
 
 ; ****************************************************************************************************
@@ -154,6 +200,7 @@ Stop:
 ;		Advance the line address HL down by 1, handles the slightly odd screen arrangement
 ;
 ; ****************************************************************************************************
+
 __DSHLDown:
 	inc 	h 								; next line down.
 	ld 		a,h 							; have we stepped over the border
@@ -172,6 +219,41 @@ __DSHLDown:
 	ld 		a,h 							; next page down.
 	add 	8
 	ld 		h,a
+	ret
+
+; ****************************************************************************************************
+;
+;						Repair damage - restore saved screen for sprite at IX
+;
+; ****************************************************************************************************
+
+__DSRestoreSavedScreen:
+	ld 		b,(ix+2)						; set counter
+	res 	7,b
+	ld 		l,(ix+6)						; get address of data
+	ld 		h,(ix+7)
+	ld 		a,h 							; return if zero (e.g. no storage)
+	or 		l
+	ret 	z
+	ld 		e,(hl)							; read start address of screen into DE
+	inc 	hl
+	ld 		d,(hl)
+	inc 	hl
+
+__DSRLoop:
+	push 	bc
+	ldi  									; copy three bytes (HL) to (DE)	
+	ldi 
+	ldi 
+	dec 	de 								; fix up DE 								
+	dec 	de
+	dec 	de
+	ex 		de,hl 							; HL = screen
+	call	__DSHLDown	 					; down one line
+	ex 		de,hl 							; put back so DE screen HL data
+
+	pop		bc 								; do once for each line
+	djnz 	__DSRLoop
 	ret
 
 ; ****************************************************************************************************
@@ -206,18 +288,23 @@ __DSShiftEntry:
 	adc 	a,a
 	ret
 
+; ****************************************************************************************************
+
 testSprite:
 	defb 	7
 	defb 	4
-	defb 	8
-	defb 	8
+	defb 	10
+	defb 	0
+	defw 	graphicData
+	defw 	backStore
+	defw 	maskData
 
 backStore:
 	defs 	8*3
 
 graphicData:
 	defb 	0FFh,0FFh
-	defb 	080h,001h
+	defb 	0AAh,0AAh
 	defb 	080h,003h
 	defb 	080h,007h
 	defb 	08Fh,00Fh
@@ -228,13 +315,13 @@ graphicData:
 	defb 	007h,000h
 
 maskData:
-	defb 	001h,080h
-	defb 	003h,0C0h
-	defb 	007h,0E0h
-	defb 	00Fh,0F0h
-	defb 	01Fh,0F8h
-	defb 	03Fh,0FCh
-	defb 	07Fh,0FEh
 	defb 	0FFh,0FFh
-	defb 	001h,080h
 	defb 	0FFh,0FFh
+	defb 	0FFh,0FFh
+	defb 	0FFh,0FFh
+	defb 	0FFh,0FFh
+	defb 	0FFh,0FFh
+	defb 	0FFh,0FFh
+	defb 	0FFh,0FFh
+	defb 	0FFh,0FFh
+

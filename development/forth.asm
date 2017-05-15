@@ -17,9 +17,13 @@ BootWord:
 	defw 		WORD_Stop
 
 Test:
+	push 		bc
+	push 		de
 	push 		ix
 	call 		DrawSprite
 	pop 		ix
+	pop 		de
+	pop			bc
 	jp 			(ix)
 
 WORD_Star:
