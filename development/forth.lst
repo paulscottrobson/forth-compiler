@@ -1,6 +1,6 @@
               	; --------------------------------------
               	; zasm: assemble "forth.asm"
-              	; date: 2017-05-16 11:29:12
+              	; date: 2017-05-16 15:34:08
               	; --------------------------------------
 
 
@@ -93,9 +93,9 @@
               	; ****************************************************************************************************
               	
 8000:         	BootAddress:
-8000: DC83    		defw 	BootWord 						; start of threaded word.
+8000: 1884    		defw 	BootWord 						; start of threaded word.
 8002:         	FreeAddress:
-8002: F283    		defw 	EndOfCode 						; end of code that is built with the assembler.
+8002: 2E84    		defw 	EndOfCode 						; end of code that is built with the assembler.
               	
               	; ****************************************************************************************************
               	;
@@ -517,7 +517,6 @@
               	;
               	; ****************************************************************************************************
               	
-              	
 8159:         	WORD_Branch:								; <<[br]>>
 8159: EB      		ex 	 	de,hl 							; HL now points to the next word
 815A: 5E      		ld 		e,(hl)							; read into DE
@@ -570,6 +569,99 @@
 8185: 0B      		dec 	bc
 8186: 0B      		dec 	bc
 8187: DDE9    		jp 		(ix)
+              	
+              	; ****************************************************************************************************
+              	;
+              	;	These routines are (potentially) common to any graphics routines, so are placed here. At the
+              	;
+              	;	present time both are only used by 'Sprite'
+              	;
+              	; ****************************************************************************************************
+              	
+              	; ****************************************************************************************************
+              	;
+              	;		Calculate Pixel Address (DE)  Attribute Address (HL) for Pixel (B,C). Return CY=0 if bad 
+              	;
+              	; ****************************************************************************************************
+              	
+8189:         	CalculatePixelAndAttrAddress:
+8189: 79      		ld 		a,c 							; check Y on screen
+818A: FEC0    		cp 		192
+818C: D0      		ret 	nc 								; if >= 24*8 then exit now.	
+              	
+818D: E607    		and 	7 								; get the three low bits.
+818F: 67      		ld  	h,a 							; goes in H bits 2..0
+              	
+8190: 79      		ld 		a,c 							; we want bits 7..6 to be in 4..3
+8191: 1F      		rra 									; in 6..5
+8192: 1F      		rra 									; in 5..4
+8193: 1F      		rra										; in 4..3
+              	
+8194: E618    		and 	018h 							; isolate
+8196: B4      		or 		h 								; or with H
+8197: F640    		or 		040h 							; set bit 6
+8199: 67      		ld 		h,a 							; and copy back.
+              	
+819A: 79      		ld 		a,c 							; we want bits 5,4,3 to be in slots 7,6,5
+819B: 87      		add 	a,a
+819C: 87      		add 	a,a
+819D: E6E0    		and 	0E0h
+819F: 6F      		ld 		l,a 							; save in L
+              	
+81A0: 78      		ld 		a,b 							; get X bits 7..3 - 4..0
+81A1: 1F      		rra
+81A2: 1F      		rra
+81A3: 1F      		rra	
+81A4: E61F    		and 	1Fh
+81A6: 5F      		ld 		e,a 							; save X/8 in E
+              	
+81A7: B5      		or  	l 								; or into L and write back
+81A8: 6F      		ld  	l,a 							; HL now is the base graphic
+81A9: E5      		push 	hl
+              	
+81AA: DD7E01  		ld 		a,(ix+1) 						; get Y
+81AD: E6F8    		and 	0F8h							; now (Y / 8) * 8
+81AF: 6F      		ld 		l,a
+81B0: 2600    		ld 		h,0
+81B2: 29      		add 	hl,hl 						
+81B3: 29      		add 	hl,hl 							; now (Y / 8) * 32
+              	
+81B4: 1658    		ld 		d,058h 							; B = $5800 + (X / 8)
+81B6: 19      		add 	hl,de
+81B7: D1      		pop 	de
+81B8: 37      		scf
+81B9: C9      		ret
+              	
+              	; ****************************************************************************************************
+              	;
+              	;		Advance the line address HL down by 1, handles the slightly odd screen arrangement
+              	;
+              	;							If CY clear, then we have changed attribute byte.
+              	;
+              	; ****************************************************************************************************
+              	
+81BA:         	MovePixelAddressDown:
+81BA: 24      		inc 	h 								; next line down.
+81BB: 7C      		ld 		a,h 							; have we stepped over the border
+81BC: E607    		and 	7
+81BE: 37      		scf 									; if we haven't, return with CY set.
+81BF: C0      		ret 	nz
+              	
+81C0: 7C      		ld 		a,h 							; fix up three lower bits of high address byte
+81C1: D608    		sub 	8
+81C3: 67      		ld 		h,a
+              	
+81C4: 7D      		ld 		a,l 							; next block of 8 down, high 3 bits of low address byte
+81C5: C620    		add 	32
+81C7: 6F      		ld 		l,a
+81C8: D0      		ret		nc
+              	
+81C9: 7C      		ld 		a,h 							; next page down ; also it will clear the carry.
+81CA: C608    		add 	8
+81CC: 67      		ld 		h,a
+81CD: C9      		ret
+              	
+              		
               		include "library/io.asm"
               	; ****************************************************************************************************
               	;
@@ -577,53 +669,53 @@
               	;
               	; ****************************************************************************************************
               	
-8189:         	WORD_Emit:									; <<emit>>
-8189: E1      		pop 	hl 								; get character to print in L
-818A: CDCD81  		call	PrintCharL
-818D: DDE9    		jp 		(ix)
+81CE:         	WORD_Emit:									; <<emit>>
+81CE: E1      		pop 	hl 								; get character to print in L
+81CF: CD1282  		call	PrintCharL
+81D2: DDE9    		jp 		(ix)
               	
-818F:         	WORD_PrintInteger:							; <<.>>
-818F: E1      		pop 	hl
-8190: CD2B82  		call 	PrintInteger
-8193: DDE9    		jp 		(ix)
+81D4:         	WORD_PrintInteger:							; <<.>>
+81D4: E1      		pop 	hl
+81D5: CD7082  		call 	PrintInteger
+81D8: DDE9    		jp 		(ix)
               	
-8195:         	WORD_PrintStack:							; <<.stack>>
-8195: D5      		push 	de 								; save DE
-8196: 210000  		ld 		hl,0  							; get SP into HL
-8199: 23      		inc 	hl 								; skip over PUSH DE above
-819A: 23      		inc 	hl
-819B: 39      		add 	hl,sp
-819C: 3E46    		ld  	a,46h 							; first yellow
-819E: 328082  		ld 		(__PCAColour),a
-81A1:         	__PSLoop:
-81A1: 5E      		ld 		e,(hl) 							; load into DE
-81A2: 23      		inc 	hl
-81A3: 56      		ld 		d,(hl)
-81A4: 23      		inc 	hl
-81A5: EB      		ex 		de,hl 							; print it
-81A6: CD2B82  		call 	PrintInteger
-81A9: EB      		ex 		de,hl
-81AA: 3E44    		ld  	a,44h 							; remainder green
-81AC: 328082  		ld 		(__PCAColour),a
-81AF: 7C      		ld 		a,h 							; reached top of stack
-81B0: B7      		or 		a
-81B1: 20EE    		jr 		nz,__PSLoop
-81B3: D1      		pop 	de 								; restore DE
-81B4: 2E0D    		ld 		l,13 							; print CR
-81B6: CDCD81  		call 	PrintCharL
-81B9: DDE9    		jp 		(ix)
+81DA:         	WORD_PrintStack:							; <<.stack>>
+81DA: D5      		push 	de 								; save DE
+81DB: 210000  		ld 		hl,0  							; get SP into HL
+81DE: 23      		inc 	hl 								; skip over PUSH DE above
+81DF: 23      		inc 	hl
+81E0: 39      		add 	hl,sp
+81E1: 3E46    		ld  	a,46h 							; first yellow
+81E3: 32C582  		ld 		(__PCAColour),a
+81E6:         	__PSLoop:
+81E6: 5E      		ld 		e,(hl) 							; load into DE
+81E7: 23      		inc 	hl
+81E8: 56      		ld 		d,(hl)
+81E9: 23      		inc 	hl
+81EA: EB      		ex 		de,hl 							; print it
+81EB: CD7082  		call 	PrintInteger
+81EE: EB      		ex 		de,hl
+81EF: 3E44    		ld  	a,44h 							; remainder green
+81F1: 32C582  		ld 		(__PCAColour),a
+81F4: 7C      		ld 		a,h 							; reached top of stack
+81F5: B7      		or 		a
+81F6: 20EE    		jr 		nz,__PSLoop
+81F8: D1      		pop 	de 								; restore DE
+81F9: 2E0D    		ld 		l,13 							; print CR
+81FB: CD1282  		call 	PrintCharL
+81FE: DDE9    		jp 		(ix)
               	
-81BB:         	WORD_ClearScreen:							; <<cls>>
-81BB: CD5282  		call 	ClearScreen
-81BE: CD6C82  		call 	HomeCursor
-81C1: DDE9    		jp 		(ix)
+8200:         	WORD_ClearScreen:							; <<cls>>
+8200: CD9782  		call 	ClearScreen
+8203: CDB182  		call 	HomeCursor
+8206: DDE9    		jp 		(ix)
               	
-81C3:         	WORD_CR:									; <<cr>>
-81C3: FDE9    		jp 		(iy)
-81C5: 2980    		defw 	Core_Literal
-81C7: 0D00    		defw 	13
-81C9: 8981    		defw 	WORD_Emit
-81CB: 3180    		defw 	Core_Return
+8208:         	WORD_CR:									; <<cr>>
+8208: FDE9    		jp 		(iy)
+820A: 2980    		defw 	Core_Literal
+820C: 0D00    		defw 	13
+820E: CE81    		defw 	WORD_Emit
+8210: 3180    		defw 	Core_Return
               	
               	; ****************************************************************************************************
               	;			This is included if io.asm is included, provides direct I/O to Speccy hardware
@@ -644,75 +736,75 @@
               	;
               	; ****************************************************************************************************
               	
-81CD:         	PrintCharL:
-81CD: F5      		push 	af 								; stack registers
-81CE: C5      		push 	bc 								
-81CF: D5      		push 	de
-81D0: E5      		push 	hl
+8212:         	PrintCharL:
+8212: F5      		push 	af 								; stack registers
+8213: C5      		push 	bc 								
+8214: D5      		push 	de
+8215: E5      		push 	hl
               	
-81D1: 7D      		ld 		a,l 							; check for CR ?
-81D2: FE0D    		cp 		13
-81D4: 2847    		jr		z,__PCLReturn
+8216: 7D      		ld 		a,l 							; check for CR ?
+8217: FE0D    		cp 		13
+8219: 2847    		jr		z,__PCLReturn
               	
-81D6: 0600    		ld 		b,0 							; B is the reversing byte
-81D8: CB7D    		bit 	7,l 							; if bit 7 set
-81DA: 2803    		jr 		z,__PCANotReverse
-81DC: 05      		dec 	b 								; B becomes $FF
-81DD: CBBD    		res 	7,l 							; drop bit 7
-81DF:         	__PCANotReverse:
-81DF: 2600    		ld 		h,0 							; HL to 16 bit
-81E1: ED5B7A82		ld 		de,(__PCAFont)					; DE = Font Base
-81E5: 29      		add 	hl,hl 							; calc Font Base + char * 8
-81E6: 29      		add 	hl,hl
-81E7: 29      		add 	hl,hl
-81E8: 19      		add 	hl,de
-81E9: EB      		ex 		de,hl 							; put in DE
-81EA: 2A7C82  		ld 		hl,(__PCAVideoPos) 				; get write address
-81ED: E5      		push 	hl 								; save for later
-81EE:         	_PCALoop:	
-81EE: 1A      		ld 		a,(de) 							; read font char
-81EF: A8      		xor 	b 								; reverse byte
-81F0: 77      		ld 		(hl),a 							; write to screen
-81F1: 1C      		inc 	e 								; bump pointers
-81F2: 24      		inc 	h
-81F3: 7C      		ld 		a,h 							; until done whole row
-81F4: E607    		and 	7
-81F6: 20F6    		jr 		nz,_PCALoop
+821B: 0600    		ld 		b,0 							; B is the reversing byte
+821D: CB7D    		bit 	7,l 							; if bit 7 set
+821F: 2803    		jr 		z,__PCANotReverse
+8221: 05      		dec 	b 								; B becomes $FF
+8222: CBBD    		res 	7,l 							; drop bit 7
+8224:         	__PCANotReverse:
+8224: 2600    		ld 		h,0 							; HL to 16 bit
+8226: ED5BBF82		ld 		de,(__PCAFont)					; DE = Font Base
+822A: 29      		add 	hl,hl 							; calc Font Base + char * 8
+822B: 29      		add 	hl,hl
+822C: 29      		add 	hl,hl
+822D: 19      		add 	hl,de
+822E: EB      		ex 		de,hl 							; put in DE
+822F: 2AC182  		ld 		hl,(__PCAVideoPos) 				; get write address
+8232: E5      		push 	hl 								; save for later
+8233:         	_PCALoop:	
+8233: 1A      		ld 		a,(de) 							; read font char
+8234: A8      		xor 	b 								; reverse byte
+8235: 77      		ld 		(hl),a 							; write to screen
+8236: 1C      		inc 	e 								; bump pointers
+8237: 24      		inc 	h
+8238: 7C      		ld 		a,h 							; until done whole row
+8239: E607    		and 	7
+823B: 20F6    		jr 		nz,_PCALoop
               	
               	
-81F8: ED5B7E82		ld 		de,(__PCAAttribPos)				; copy colour byte to attribute memory.
-81FC: 3A8082  		ld 		a,(__PCAColour)
-81FF: 12      		ld 		(de),a
-8200: 13      		inc 	de
+823D: ED5BC382		ld 		de,(__PCAAttribPos)				; copy colour byte to attribute memory.
+8241: 3AC582  		ld 		a,(__PCAColour)
+8244: 12      		ld 		(de),a
+8245: 13      		inc 	de
               	
-8201: E1      		pop 	hl 								; restore original video position to HL
-8202: 2C      		inc 	l 								; right one
-8203: 200C    		jr 		nz,__PCANotNewPage 				; if nz don't need new 1/4k page
-8205: 7C      		ld 		a,h 							; advance to next quarter page
-8206: C608    		add 	8
-8208: 67      		ld 		h,a 	
-8209: FE58    		cp 		0x58 							; we only have 3, this is the attribute page
-820B: 2004    		jr 		nz,__PCANotNewPage
-820D: 2640    		ld 		h,0x40 							; wrap round to top.
-820F: 1658    		ld 		d,0x58 							; reset attribute memory pointer
-8211:         	__PCANotNewPage:
-8211: 227C82  		ld 		(__PCAVideoPos),hl 				; update new position in video / attr
-8214: ED537E82		ld 		(__PCAAttribPos),de 			
+8246: E1      		pop 	hl 								; restore original video position to HL
+8247: 2C      		inc 	l 								; right one
+8248: 200C    		jr 		nz,__PCANotNewPage 				; if nz don't need new 1/4k page
+824A: 7C      		ld 		a,h 							; advance to next quarter page
+824B: C608    		add 	8
+824D: 67      		ld 		h,a 	
+824E: FE58    		cp 		0x58 							; we only have 3, this is the attribute page
+8250: 2004    		jr 		nz,__PCANotNewPage
+8252: 2640    		ld 		h,0x40 							; wrap round to top.
+8254: 1658    		ld 		d,0x58 							; reset attribute memory pointer
+8256:         	__PCANotNewPage:
+8256: 22C182  		ld 		(__PCAVideoPos),hl 				; update new position in video / attr
+8259: ED53C382		ld 		(__PCAAttribPos),de 			
               	
-8218:         	__PCLExit:
-8218: E1      		pop 	hl 								; destack.
-8219: D1      		pop 	de
-821A: C1      		pop 	bc
-821B: F1      		pop 	af
-821C: C9      		ret
+825D:         	__PCLExit:
+825D: E1      		pop 	hl 								; destack.
+825E: D1      		pop 	de
+825F: C1      		pop 	bc
+8260: F1      		pop 	af
+8261: C9      		ret
               	
-821D:         	__PCLReturn: 								; carriage return.
-821D: 2E20    		ld 		l,' '
-821F: CDCD81  		call 	PrintCharL
-8222: 3A7C82  		ld 		a,(__PCAVideoPos)
-8225: E61F    		and 	31
-8227: 20F4    		jr 		nz,__PCLReturn
-8229: 18ED    		jr 		__PCLExit
+8262:         	__PCLReturn: 								; carriage return.
+8262: 2E20    		ld 		l,' '
+8264: CD1282  		call 	PrintCharL
+8267: 3AC182  		ld 		a,(__PCAVideoPos)
+826A: E61F    		and 	31
+826C: 20F4    		jr 		nz,__PCLReturn
+826E: 18ED    		jr 		__PCLExit
               	
               	; ****************************************************************************************************
               	;
@@ -720,16 +812,16 @@
               	;
               	; ****************************************************************************************************
               	
-822B:         	PrintInteger:
-822B: E5      		push 	hl
-822C: 2E20    		ld 		l,' ' 							; print leading space
-822E: CDCD81  		call 	PrintCharL
-8231: E1      		pop 	hl
-8232: 7C      		ld 		a,h
-8233: CD3B82  		call 	PrintByteA
-8236: 7D      		ld 		a,l
-8237: CD3B82  		call 	PrintByteA
-823A: C9      		ret
+8270:         	PrintInteger:
+8270: E5      		push 	hl
+8271: 2E20    		ld 		l,' ' 							; print leading space
+8273: CD1282  		call 	PrintCharL
+8276: E1      		pop 	hl
+8277: 7C      		ld 		a,h
+8278: CD8082  		call 	PrintByteA
+827B: 7D      		ld 		a,l
+827C: CD8082  		call 	PrintByteA
+827F: C9      		ret
               	
               	; ****************************************************************************************************
               	;
@@ -737,24 +829,24 @@
               	;
               	; ****************************************************************************************************
               	
-823B:         	PrintByteA:
-823B: F5      		push 	af 								; save A on stack
-823C: 1F      		rra 									; shift right 4
-823D: 1F      		rra
-823E: 1F      		rra
-823F: 1F      		rra
-8240: CD4482  		call	__PBANibble 					; print it
-8243: F1      		pop 	af 								; restore
-8244:         	__PBANibble:
-8244: F6F0    		or 		0F0h 							; DAA trick
-8246: 27      		daa
-8247: C6A0    		add 	a,0A0h
-8249: CE40    		adc 	a,040h
-824B: E5      		push 	hl 								; print character
-824C: 6F      		ld 		l,a
-824D: CDCD81  		call 	PrintCharL
-8250: E1      		pop 	hl
-8251: C9      		ret
+8280:         	PrintByteA:
+8280: F5      		push 	af 								; save A on stack
+8281: 1F      		rra 									; shift right 4
+8282: 1F      		rra
+8283: 1F      		rra
+8284: 1F      		rra
+8285: CD8982  		call	__PBANibble 					; print it
+8288: F1      		pop 	af 								; restore
+8289:         	__PBANibble:
+8289: F6F0    		or 		0F0h 							; DAA trick
+828B: 27      		daa
+828C: C6A0    		add 	a,0A0h
+828E: CE40    		adc 	a,040h
+8290: E5      		push 	hl 								; print character
+8291: 6F      		ld 		l,a
+8292: CD1282  		call 	PrintCharL
+8295: E1      		pop 	hl
+8296: C9      		ret
               	
               	; ****************************************************************************************************
               	;	
@@ -762,25 +854,25 @@
               	;
               	; ****************************************************************************************************
               	
-8252:         	ClearScreen:
-8252: E5      		push 	hl
-8253: 210040  		ld 		hl,0x4000 						; fill 4000-57FF with zero
-8256:         	__CLSLoop1:
-8256: 3600    		ld 		(hl),0
-8258: 23      		inc 	hl
-8259: 7C      		ld 		a,h
-825A: FE58    		cp 		0x58
-825C: 20F8    		jr		nz,__CLSLoop1
-825E:         	__CLSLoop2:									; fill 5800-5FFF with 7 (white)
-825E: 3607    		ld 		(hl),7
-8260: 23      		inc 	hl
-8261: 7C      		ld 		a,h
-8262: FE5B    		cp 		0x5B
-8264: 20F8    		jr		nz,__CLSLoop2
-8266: 3E01    		ld 		a,1 							; set border to blue.
-8268: D3FE    		out 	(0xFE),a
-826A: E1      		pop 	hl
-826B: C9      		ret
+8297:         	ClearScreen:
+8297: E5      		push 	hl
+8298: 210040  		ld 		hl,0x4000 						; fill 4000-57FF with zero
+829B:         	__CLSLoop1:
+829B: 3600    		ld 		(hl),0
+829D: 23      		inc 	hl
+829E: 7C      		ld 		a,h
+829F: FE58    		cp 		0x58
+82A1: 20F8    		jr		nz,__CLSLoop1
+82A3:         	__CLSLoop2:									; fill 5800-5FFF with 7 (white)
+82A3: 3607    		ld 		(hl),7
+82A5: 23      		inc 	hl
+82A6: 7C      		ld 		a,h
+82A7: FE5B    		cp 		0x5B
+82A9: 20F8    		jr		nz,__CLSLoop2
+82AB: 3E01    		ld 		a,1 							; set border to blue.
+82AD: D3FE    		out 	(0xFE),a
+82AF: E1      		pop 	hl
+82B0: C9      		ret
               	
               	; ****************************************************************************************************
               	;
@@ -788,39 +880,29 @@
               	;
               	; ****************************************************************************************************
               	
-826C:         	HomeCursor:	
-826C: E5      		push 	hl
-826D: 210058  		ld 		hl,0x5800 						; reset attribute pos
-8270: 227E82  		ld 		(__PCAAttribPos),hl
-8273: 2640    		ld 		h,0x40 							; reset video pos
-8275: 227C82  		ld 		(__PCAVideoPos),hl
-8278: E1      		pop 	hl
-8279: C9      		ret
+82B1:         	HomeCursor:	
+82B1: E5      		push 	hl
+82B2: 210058  		ld 		hl,0x5800 						; reset attribute pos
+82B5: 22C382  		ld 		(__PCAAttribPos),hl
+82B8: 2640    		ld 		h,0x40 							; reset video pos
+82BA: 22C182  		ld 		(__PCAVideoPos),hl
+82BD: E1      		pop 	hl
+82BE: C9      		ret
               	
-827A:         	__PCAFont: 									; font base here
-827A: 003C    		defw 	0x3C00
-827C:         	__PCAVideoPos: 								; current video memory pointer.
-827C: 0040    		defw 	VideoMemory
-827E:         	__PCAAttribPos:								; current attribute pointer
-827E: 0058    		defw 	AttributeMemory
-8280:         	__PCAColour: 								; current colour to use
-8280: 44      		defb 	0x44
+82BF:         	__PCAFont: 									; font base here
+82BF: 003C    		defw 	0x3C00
+82C1:         	__PCAVideoPos: 								; current video memory pointer.
+82C1: 0040    		defw 	VideoMemory
+82C3:         	__PCAAttribPos:								; current attribute pointer
+82C3: 0058    		defw 	AttributeMemory
+82C5:         	__PCAColour: 								; current colour to use
+82C5: 44      		defb 	0x44
               		include "library/sprites.asm"
               	; ****************************************************************************************************
               	;
               	;										16 x 16 Sprite Words
               	;
               	; ****************************************************************************************************
-              	
-8281:         	WORD_Test:
-8281: C5      		push 		bc
-8282: D5      		push 		de
-8283: DDE5    		push 		ix
-8285: CD8883  		call 		TSDraw
-8288: DDE1    		pop 		ix
-828A: D1      		pop 		de
-828B: C1      		pop			bc
-828C: DDE9    		jp 			(ix)
               	
               		include 	"utils/sprites16x16.asm"
               	; ****************************************************************************************************
@@ -835,6 +917,8 @@
               	;	There is some self modifying code here - the pointers are all kept in SMC, so is the counter
               	;	and it is also used to modify the 24 bit shifter.
               	;
+              	;	On a stock Spectrum (Fuse) can do about 500 draws/erases a second.
+              	;
               	; ****************************************************************************************************
               	; ****************************************************************************************************
               	;	
@@ -847,173 +931,143 @@
               	;	+4,5 		pointer to 16 bit pixel data, 32 bytes
               	;	+6,7 		reserved (0)
               	;
+              	; ****************************************************************************************************
+              	;
+              	;								Draw/Erase main entry points
+              	;	
+              	; ****************************************************************************************************
               	
+82C6:         	DrawSprite:
+82C6: DDCB037E		bit 	7,(ix+3)
+82CA: C0      		ret 	nz
+82CB: 1807    		jr 		__DSDrawSprite
+              	
+82CD:         	EraseSprite:
+82CD: DDCB037E		bit 	7,(ix+3)
+82D1: C8      		ret 	z
+82D2: 1800    		jr 		__DSDrawSprite
               	
               	; ****************************************************************************************************
               	;
-              	;								Copy attribute screen to shadow screen
+              	;									Draw Sprite Main Code
               	;
               	; ****************************************************************************************************
               	
-828E:         	CopyAttributeToShadow:
-828E: 11005C  		ld 		de,05C00h
-8291: 210058  		ld 		hl,05800h
-8294: 010003  		ld 		bc,32*24
-8297: EDB0    		ldir 	
-8299: C9      		ret
+82D4:         	__DSDrawSprite:
+82D4: C5      		push 	bc 								; save registers
+82D5: D5      		push 	de
+82D6: E5      		push 	hl
+82D7: DD4600  		ld 		b,(ix+0)						; get the X position
+82DA: DD4E01  		ld 		c,(ix+1) 						; get the Y position.
+82DD: CD8981  		call 	CalculatePixelAndAttrAddress 	; calculate pixel/attribute address
+82E0: 306A    		jr 		nc,__DSPop		 				; off screen
               	
-              	; ****************************************************************************************************
-              	;
-              	;												Draw Sprite
-              	;
-              	; ****************************************************************************************************
-              	
-              	
-829A:         	__DSDrawSprite:
-829A: DD7E01  		ld 		a,(ix+1) 						; get the Y position.
-829D: FEC0    		cp 		192
-829F: D0      		ret 	nc 								; if >= 24*8 then exit now.	
-              	
-82A0: 5F      		ld  	e, a 							; save in E
-82A1: E607    		and 	7 								; get the three low bits.
-82A3: 67      		ld  	h,a 							; goes in H bits 2..0
-              	
-82A4: 7B      		ld 		a,e 							; we want bits 7..6 to be in 4..3
-82A5: 1F      		rra 									; in 6..5
-82A6: 1F      		rra 									; in 5..4
-82A7: 1F      		rra										; in 4..3
-              	
-82A8: E618    		and 	018h 							; isolate
-82AA: B4      		or 		h 								; or with H
-82AB: F640    		or 		040h 							; set bit 6
-82AD: 67      		ld 		h,a 							; and copy back.
-              	
-82AE: 7B      		ld 		a,e 							; we want bits 5,4,3 to be in slots 7,6,5
-82AF: 87      		add 	a,a
-82B0: 87      		add 	a,a
-82B1: E6E0    		and 	0E0h
-82B3: 6F      		ld 		l,a 							; save in L
-              	
-82B4: DD7E00  		ld 		a,(ix+0) 						; get X bits 7..3 - 4..0
-82B7: 1F      		rra
-82B8: 1F      		rra
-82B9: 1F      		rra	
-82BA: E61F    		and 	1Fh
-82BC: 4F      		ld 		c,a 							; save X/8 in C
-              	
-82BD: B5      		or  	l 								; or into L and write back
-82BE: 6F      		ld  	l,a 							; HL now is the base graphic
-82BF: 220083  		ld 		(__DSLoadScreenAddress+1),hl 	; save it out
-              	
-82C2: DD7E01  		ld 		a,(ix+1) 						; get Y
-82C5: E6F8    		and 	0F8h							; now (Y / 8) * 8
-82C7: 6F      		ld 		l,a
-82C8: 2600    		ld 		h,0
-82CA: 29      		add 	hl,hl 						
-82CB: 29      		add 	hl,hl 							; now (Y / 8) * 32
-              	
-82CC: 0658    		ld 		b,058h 							; B = $5800 + (X / 8)
-82CE: 09      		add 	hl,bc
-82CF: 223783  		ld 		(__DSAttributeAddress+1),hl 	; save attribute address
+82E2: 225183  		ld 		(__DSAttributeAddress+1),hl 	; save attribute address
+82E5: ED531783		ld 		(__DSPixelAddress+1),de 		; save pixel address
               	
               	; ****************************************************************************************************
               	;						Copy address of graphic data, self modifying code.
               	; ****************************************************************************************************
               	
-82D2: DD6E04  		ld 			l,(ix+4)					; graphic data
-82D5: DD6605  		ld 			h,(ix+5)
-82D8: 22F082  		ld 			(__DSLoadGraphicData+1),hl
+82E9: DD6E04  		ld 			l,(ix+4)					; graphic data
+82EC: DD6605  		ld 			h,(ix+5)
+82EF: 220783  		ld 			(__DSLoadGraphicData+1),hl
               	
               	; ****************************************************************************************************
               	;					Set up the pixel shifter for the 3 LSB of the x coordinate
               	; ****************************************************************************************************
               	
-82DB: DD7E00  		ld 		a,(ix+0) 						; x 0-7 pixels
-82DE: E607    		and 	7
-82E0: 2804    		jr 		z,__DSOffsetDone 				; if zero, the JR will just fall through to register move
-82E2: 3D      		dec 	a
-82E3: 87      		add 	a,a	
-82E4: C605    		add 	__DSShiftEntry-__DSShiftAHL-2
-82E6:         	__DSOffsetDone:
-82E6: 327383  		ld 		(__DSShiftAHL+1),a 				; set the JR offset.
+82F2: DD7E00  		ld 		a,(ix+0) 						; x 0-7 pixels
+82F5: E607    		and 	7
+82F7: 2804    		jr 		z,__DSOffsetDone 				; if zero, the JR will just fall through to register move
+82F9: 3D      		dec 	a
+82FA: 87      		add 	a,a	
+82FB: C605    		add 	__DSShiftEntry-__DSShiftAHL-2
+82FD:         	__DSOffsetDone:
+82FD: 327983  		ld 		(__DSShiftAHL+1),a 				; set the JR offset.
               	
-82E9: CD3683  		call 	__DSColourLine 					; colour the first line.
+8300: CD5083  		call 	__DSColourLine 					; colour the first line.
               	
               	; ****************************************************************************************************
               	;   						   S P R I T E     M A I N     L O O P
               	; ****************************************************************************************************
               	
-82EC: 0610    		ld 			b,16 						; reset the draw counter to 16.
-82EE:         	__DSMainLoop:
-82EE: C5      		push 		bc
+8303: 0610    		ld 			b,16 						; reset the draw counter to 16.
+8305:         	__DSMainLoop:
+8305: C5      		push 		bc
               	
               	; ****************************************************************************************************
               	;								XOR the graphic data into the screen
               	; ****************************************************************************************************
               	
-82EF:         	__DSLoadGraphicData:
-82EF: 210000  		ld 		hl,0000h 						; pointer to graphic data (modified in-line)
-82F2: 56      		ld 		d,(hl) 							; read into DE
-82F3: 23      		inc 	hl
-82F4: 5E      		ld 		e,(hl)
-82F5: 23      		inc 	hl
-82F6: 22F082  		ld 		(__DSLoadGraphicData+1),hl 		; update graphic data pointer
+8306:         	__DSLoadGraphicData:
+8306: 210000  		ld 		hl,0000h 						; pointer to graphic data (modified in-line)
+8309: 56      		ld 		d,(hl) 							; read into DE
+830A: 23      		inc 	hl
+830B: 5E      		ld 		e,(hl)
+830C: 23      		inc 	hl
+830D: 220783  		ld 		(__DSLoadGraphicData+1),hl 		; update graphic data pointer
               	
-82F9: EB      		ex 		de,hl 							; 16 bit now in HL.
-82FA: AF      		xor  	a 								; 24 bit graphic in AHL
+8310: EB      		ex 		de,hl 							; 16 bit now in HL.
+8311: AF      		xor  	a 								; 24 bit graphic in AHL
               	
-82FB: CD7283  		call 	__DSShiftAHL					; shift it accordingly
+8312: CD7883  		call 	__DSShiftAHL					; shift it accordingly
               	
-82FE: EB      		ex 		de,hl 							; now it is in ADE
+8315: EB      		ex 		de,hl 							; now it is in ADE
               	
-82FF:         	__DSLoadScreenAddress:
-82FF: 210000  		ld 		hl,0000h						; where we will write on the screen
+8316:         	__DSPixelAddress:
+8316: 210000  		ld 		hl,0000h						; where we will write on the screen
               	
-8302: AE      		xor 	(hl) 							; XOR those three bytes in to the screen
-8303: 77      		ld 		(hl),a
-8304: 2C      		inc 	l
-8305: 7A      		ld 		a,d
-8306: AE      		xor 	(hl)
-8307: 77      		ld 		(hl),a
-8308: 2C      		inc 	l
-8309: 7B      		ld 		a,e
-830A: AE      		xor 	(hl)
-830B: 77      		ld 		(hl),a
-830C: 2D      		dec 	l 								; unpick the increment so HL points to the first byte
-830D: 2D      		dec 	l
+8319: AE      		xor 	(hl) 							; XOR those three bytes in to the screen
+831A: 77      		ld 		(hl),a
+831B: 2C      		inc 	l
+831C: 7A      		ld 		a,d
+831D: AE      		xor 	(hl)
+831E: 77      		ld 		(hl),a
+831F: 2C      		inc 	l
+8320: 7B      		ld 		a,e
+8321: AE      		xor 	(hl)
+8322: 77      		ld 		(hl),a
+8323: 2D      		dec 	l 								; unpick the increment so HL points to the first byte
+8324: 2D      		dec 	l
               	
               	; ****************************************************************************************************
               	;										Move to the next line down
               	; ****************************************************************************************************
               	
-830E: CD5E83  		call 	__DSHLDown 						; HL Down one line
-8311: 220083  		ld 		(__DSLoadScreenAddress+1),hl 	; update the screen address.
+8325: CDBA81  		call 	MovePixelAddressDown 						; HL Down one line
+8328: 221783  		ld 		(__DSPixelAddress+1),hl 		; update the screen address.
               	
-8314: 380F    		jr 		c,__DSHNoAttributeDown
+832B: 380F    		jr 		c,__DSHNoAttributeDown 			; no attribute change
               	
-8316: E5      		push 	hl
-8317: 2A3783  		ld 		hl,(__DSAttributeAddress+1)
-831A: 112000  		ld 		de,32
-831D: 19      		add 	hl,de
-831E: 223783  		ld 		(__DSAttributeAddress+1),hl
-8321: CD3683  		call 	__DSColourLine
-8324: E1      		pop 	hl
+832D: E5      		push 	hl 								; save HL
+832E: 2A5183  		ld 		hl,(__DSAttributeAddress+1) 	; add 32 to attribute address
+8331: 112000  		ld 		de,32
+8334: 19      		add 	hl,de
+8335: 225183  		ld 		(__DSAttributeAddress+1),hl
+8338: CD5083  		call 	__DSColourLine 					; colour that line
+833B: E1      		pop 	hl 								; restore HL
               	
-8325:         	__DSHNoAttributeDown:
+833C:         	__DSHNoAttributeDown:
               	
-8325: C1      		pop 	bc 								; restore counter
-8326: 7C      		ld 		a,h
-8327: FE58    		cp 		58h								; into attribute memory ?
-8329: 2802    		jr 		z,__DSExitEarly 				; off bottom of screen, end of sprite draw
+833C: C1      		pop 	bc 								; restore counter
+833D: 7C      		ld 		a,h
+833E: FE58    		cp 		58h								; into attribute memory ?
+8340: 2802    		jr 		z,__DSExitEarly 				; off bottom of screen, end of sprite draw
               	
               	
-832B: 10C1    		djnz	__DSMainLoop 					; keep going till done all lines, or reached the end of screen memory
+8342: 10C1    		djnz	__DSMainLoop 					; keep going till done all lines, or reached the end of screen memory
               	
-832D:         	__DSExitEarly:
-832D: DD7E03  		ld 		a,(ix+3)						; toggle the erased/drawn bit
-8330: EE80    		xor 	080h
-8332: DD7703  		ld 		(ix+3),a
-8335: C9      		ret
+8344:         	__DSExitEarly:
+8344: DD7E03  		ld 		a,(ix+3)						; toggle the erased/drawn bit
+8347: EE80    		xor 	080h
+8349: DD7703  		ld 		(ix+3),a
+              	
+834C:         	__DSPop:
+834C: E1      		pop 	hl
+834D: D1      		pop 	de
+834E: C1      		pop 	bc
+834F: C9      		ret
               	
               	; ****************************************************************************************************
               	;
@@ -1021,67 +1075,38 @@
               	;
               	; ****************************************************************************************************
               	
-8336:         	__DSColourLine:
+8350:         	__DSColourLine:
               		
-8336:         	__DSAttributeAddress:
-8336: 210000  		ld 		hl,0000 						; address to write colour to.
-8339: DD7E02  		ld 		a,(ix+2)						; get attribute to write.
-833C: B7      		or 		a
-833D: C8      		ret 	z
+8350:         	__DSAttributeAddress:
+8350: 210000  		ld 		hl,0000 						; address to write colour to.
+8353: DD7E02  		ld 		a,(ix+2)						; get attribute to write.
+8356: B7      		or 		a
+8357: C8      		ret 	z
               	
-833E: DDCB037E		bit 	7,(ix+3) 						; if bit 7 is set (e.g. we are erasing)
-8342: 200D    		jr 		nz,__DSCLErase
+8358: DDCB037E		bit 	7,(ix+3) 						; if bit 7 is set (e.g. we are erasing)
+835C: 200D    		jr 		nz,__DSCLErase
               	
-8344: 77      		ld 		(hl),a 							; write 2 bytes out.
-8345: 23      		inc 	hl
-8346: 77      		ld 		(hl),a 
-8347: 47      		ld 		b,a 							; save in B.
-8348: DD7E00  		ld 		a,(ix+0) 						; do not write third attribute out if X mod 8 = 0, fits in two words.
-834B: E607    		and 	7
-834D: C8      		ret 	z
-834E: 23      		inc 	hl 								; do the third attribute byte
-834F: 70      		ld 		(hl),b
-8350: C9      		ret
+835E: 77      		ld 		(hl),a 							; write 2 bytes out.
+835F: 23      		inc 	hl
+8360: 77      		ld 		(hl),a 
+8361: 47      		ld 		b,a 							; save in B.
+8362: DD7E00  		ld 		a,(ix+0) 						; do not write third attribute out if X mod 8 = 0, fits in two words.
+8365: E607    		and 	7
+8367: C8      		ret 	z
+8368: 23      		inc 	hl 								; do the third attribute byte
+8369: 70      		ld 		(hl),b
+836A: C9      		ret
               	
-8351:         	__DSCLErase:
-8351: 5D      		ld 		e,l 							; copy HL to DE
-8352: 54      		ld 		d,h
-8353: 7C      		ld 		a,h 							; copy from $5C00-$5EFF to $5800-$5AFF
-8354: C604    		add 	4	
-8356: 67      		ld 		h,a
-8357: EDA0    		ldi
-8359: EDA0    		ldi
-835B: EDA0    		ldi
-835D: C9      		ret
-              	
-              	; ****************************************************************************************************
-              	;
-              	;		Advance the line address HL down by 1, handles the slightly odd screen arrangement
-              	;
-              	;							If CY clear, then we have changed attribute byte.
-              	;
-              	; ****************************************************************************************************
-              	
-835E:         	__DSHLDown:
-835E: 24      		inc 	h 								; next line down.
-835F: 7C      		ld 		a,h 							; have we stepped over the border
-8360: E607    		and 	7
-8362: 37      		scf 									; if we haven't, return with CY set.
-8363: C0      		ret 	nz
-              	
-8364: 7C      		ld 		a,h 							; fix up three lower bits of high address byte
-8365: D608    		sub 	8
-8367: 67      		ld 		h,a
-              	
-8368: 7D      		ld 		a,l 							; next block of 8 down, high 3 bits of low address byte
-8369: C620    		add 	32
-836B: 6F      		ld 		l,a
-836C: D0      		ret		nc
-              	
-836D: 7C      		ld 		a,h 							; next page down ; also it will clear the carry.
-836E: C608    		add 	8
+836B:         	__DSCLErase:
+836B: 5D      		ld 		e,l 							; copy HL to DE
+836C: 54      		ld 		d,h
+836D: 7C      		ld 		a,h 							; copy from $5C00-$5EFF to $5800-$5AFF
+836E: C604    		add 	4	
 8370: 67      		ld 		h,a
-8371: C9      		ret
+8371: EDA0    		ldi
+8373: EDA0    		ldi
+8375: EDA0    		ldi
+8377: C9      		ret
               	
               	; ****************************************************************************************************
               	;
@@ -1090,100 +1115,139 @@
               	;
               	; ****************************************************************************************************
               	
-8372:         	__DSShiftAHL:
-8372: 1805    		jr 		__DSShiftEntry 					; this jump vector is zero if x % 8 = 0, otherwise it jumps into code below to shift
-8374: 7C      		ld 		a,h
-8375: 65      		ld 		h,l
-8376: 2E00    		ld 		l,0
-8378: C9      		ret
+8378:         	__DSShiftAHL:
+8378: 1805    		jr 		__DSShiftEntry 					; this jump vector is zero if x % 8 = 0, otherwise it jumps into code below to shift
+837A: 7C      		ld 		a,h
+837B: 65      		ld 		h,l
+837C: 2E00    		ld 		l,0
+837E: C9      		ret
               	
-8379:         	__DSShiftEntry:
-8379: 29      		add 	hl,hl 							; the JR at __DSShiftEntry jumps into this code.
-837A: 8F      		adc 	a,a
-837B: 29      		add 	hl,hl
-837C: 8F      		adc 	a,a
-837D: 29      		add 	hl,hl
-837E: 8F      		adc 	a,a
-837F: 29      		add 	hl,hl
+837F:         	__DSShiftEntry:
+837F: 29      		add 	hl,hl 							; the JR at __DSShiftEntry jumps into this code.
 8380: 8F      		adc 	a,a
-              	
 8381: 29      		add 	hl,hl
 8382: 8F      		adc 	a,a
 8383: 29      		add 	hl,hl
 8384: 8F      		adc 	a,a
 8385: 29      		add 	hl,hl
 8386: 8F      		adc 	a,a
-8387: C9      		ret
+              	
+8387: 29      		add 	hl,hl
+8388: 8F      		adc 	a,a
+8389: 29      		add 	hl,hl
+838A: 8F      		adc 	a,a
+838B: 29      		add 	hl,hl
+838C: 8F      		adc 	a,a
+838D: C9      		ret
+              	
+              	; ****************************************************************************************************
+              	;
+              	;								Copy attribute screen to shadow screen
+              	;
+              	; ****************************************************************************************************
+              	
+838E:         	CopyAttributeToShadow:
+838E: D9      		exx
+838F: 11005C  		ld 		de,05C00h 						; to shadow at $5C00
+8392: 210058  		ld 		hl,05800h 						; from original at $5800
+8395: 010003  		ld 		bc,32*24 						; bytes to copy
+8398: EDB0    		ldir 	 								; copy.
+839A: D9      		exx
+839B: C9      		ret
+              	
+839C:         	WORD_Test:
+839C: DDE5    		push 		ix
+839E: FDE5    		push 		iy
+83A0: CDA983  		call 		TSDraw
+83A3: FDE1    		pop 		iy
+83A5: DDE1    		pop 		ix
+83A7: DDE9    		jp 			(ix)
               	
               	
               	; ****************************************************************************************************
               	
-8388:         	TSDraw:
-8388: CD8E82  		call 	CopyAttributeToShadow
-838B: DD21B483		ld 		ix,testSprite
-838F:         	TSLoop:
-838F: CD9A82  		call 	__DSDrawSprite
-8392:         	TSDelay:
-8392: 21E803  		ld 		hl,1000
-8395:         	TSDelay1:
-8395: 2B      		dec 	hl
-8396: 7C      		ld 		a,h
-8397: B5      		or 		l
-8398: 20FB    		jr 		nz,TSDelay1
-839A: CD9A82  		call 	__DSDrawSprite
-839D: DD3400  		inc 	(ix+0)
-83A0: DD3401  		inc 	(ix+1)
-83A3: DD7E01  		ld 		a,(ix+1)
-83A6: FEA0    		cp 		160
-83A8: 20E5    		jr 		nz,TSLoop
-83AA: DD360040		ld 		(ix+0),64
-83AE: DD360120		ld 		(ix+1),32
-83B2: 18DB    		jr 		TSLoop
+83A9:         	TSDraw:
+83A9: CD8E83  		call 	CopyAttributeToShadow
+83AC: DD21F083		ld 		ix,testSprite
+83B0: 21F401  		ld 		hl,1000/2
+83B3:         	TSLoop:
+83B3: E5      		push 	hl
+83B4: CDC682  		call 	DrawSprite
+83B7: CDCD82  		call 	EraseSprite
+83BA: DD7E00  		ld 		a,(ix+0)
+83BD: EE20    		xor 	32
+83BF: DD7700  		ld 		(ix+0),a
               	
-83B4:         	testSprite:
-83B4: 43      		defb 	67
-83B5: 23      		defb 	35		
-83B6: 4600    		defb 	046h,0
-83B8: BC830000		defw 	graphicData,0
+83C2: DD7E02  		ld 		a,(ix+2)
+83C5: EE04    		xor 	4
+83C7: DD7702  		ld 		(ix+2),a
+83CA: E1      		pop 	hl
+83CB: 2B      		dec 	hl
+83CC: 7C      		ld 		a,h
+83CD: B5      		or 		l
+83CE: 20E3    		jr 		nz,TSLoop
+83D0: C9      		ret
               	
-83BC:         	graphicData:
-83BC: FFFF    		defb 	0FFh,0FFh
-83BE: AAAA    		defb 	0AAh,0AAh
-83C0: 8003    		defb 	080h,003h
-83C2: 8007    		defb 	080h,007h
+83D1:         	TSDelay:
+83D1: 21E803  		ld 		hl,1000
+83D4:         	TSDelay1:
+83D4: 2B      		dec 	hl
+83D5: 7C      		ld 		a,h
+83D6: B5      		or 		l
+83D7: 20FB    		jr 		nz,TSDelay1
+83D9: DD3400  		inc 	(ix+0)
+83DC: DD3401  		inc 	(ix+1)
+83DF: DD7E01  		ld 		a,(ix+1)
+83E2: FEA0    		cp 		160
+83E4: 20CD    		jr 		nz,TSLoop
+83E6: DD360045		ld 		(ix+0),69
+83EA: DD360121		ld 		(ix+1),33
+83EE: 18C3    		jr 		TSLoop
               	
-83C4: 8F0F    		defb 	08Fh,00Fh
-83C6: 801F    		defb 	080h,01Fh
-83C8: FFE0    		defb 	0FFh,0E0h
-83CA: 0200    		defb 	002h,000h
+83F0:         	testSprite:
+83F0: 43      		defb 	67
+83F1: 23      		defb 	35		
+83F2: 4500    		defb 	045h,0
+83F4: F8830000		defw 	graphicData,0
               	
-83CC: 0200    		defb 	002h,000h
-83CE: 0700    		defb 	007h,000h
-83D0: 8001    		defb 	080h,001h
-83D2: 8001    		defb 	080h,001h
+83F8:         	graphicData:
+83F8: FFFF    		defb 	0FFh,0FFh
+83FA: AAAA    		defb 	0AAh,0AAh
+83FC: 8003    		defb 	080h,003h
+83FE: 8007    		defb 	080h,007h
               	
-83D4: 8001    		defb 	080h,001h
-83D6: 8001    		defb 	080h,001h
-83D8: 8001    		defb 	080h,001h
-83DA: FFFF    		defb 	0FFh,0FFh
+8400: 8F0F    		defb 	08Fh,00Fh
+8402: 801F    		defb 	080h,01Fh
+8404: FFE0    		defb 	0FFh,0E0h
+8406: 0200    		defb 	002h,000h
+              	
+8408: 0200    		defb 	002h,000h
+840A: 0700    		defb 	007h,000h
+840C: 8001    		defb 	080h,001h
+840E: 8001    		defb 	080h,001h
+              	
+8410: 8001    		defb 	080h,001h
+8412: 8001    		defb 	080h,001h
+8414: 8001    		defb 	080h,001h
+8416: FFFF    		defb 	0FFh,0FFh
               	
               	
-83DC:         	BootWord:
-83DC: FDE9    		jp 			(iy)
-83DE: BB81    		defw 		WORD_ClearScreen
-83E0: E883    		defw 		WORD_Star
-83E2: 8182    		defw 		WORD_Test
-83E4: E883    		defw 		WORD_Star
-83E6: 7181    		defw 		WORD_Stop
+8418:         	BootWord:
+8418: FDE9    		jp 			(iy)
+841A: 0082    		defw 		WORD_ClearScreen
+841C: 2484    		defw 		WORD_Star
+841E: 9C83    		defw 		WORD_Test
+8420: 2484    		defw 		WORD_Star
+8422: 7181    		defw 		WORD_Stop
               	
-83E8:         	WORD_Star:
-83E8: FDE9    		jp 			(iy)
-83EA: 2980    		defw 		Core_Literal
-83EC: 2A00    		defw 		42
-83EE: 8981    		defw 		WORD_Emit
-83F0: 3180    		defw 		Core_Return
+8424:         	WORD_Star:
+8424: FDE9    		jp 			(iy)
+8426: 2980    		defw 		Core_Literal
+8428: 2A00    		defw 		42
+842A: CE81    		defw 		WORD_Emit
+842C: 3180    		defw 		Core_Return
               	
-83F2:         	EndOfCode:
+842E:         	EndOfCode:
               	
               	; ****************************************************************************************************
               	;
@@ -1221,5 +1285,5 @@
               	
 
 
-total time: 0.0024 sec.
+total time: 0.0026 sec.
 no errors

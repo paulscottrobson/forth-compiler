@@ -10,6 +10,8 @@
 ;	There is some self modifying code here - the pointers are all kept in SMC, so is the counter
 ;	and it is also used to modify the 24 bit shifter.
 ;
+;	On a stock Spectrum (Fuse) can do about 500 draws/erases a second.
+;
 ; ****************************************************************************************************
 ; ****************************************************************************************************
 ;	
@@ -22,74 +24,39 @@
 ;	+4,5 		pointer to 16 bit pixel data, 32 bytes
 ;	+6,7 		reserved (0)
 ;
+; ****************************************************************************************************
+;
+;								Draw/Erase main entry points
+;	
+; ****************************************************************************************************
 
+DrawSprite:
+	bit 	7,(ix+3)
+	ret 	nz
+	jr 		__DSDrawSprite
+
+EraseSprite:
+	bit 	7,(ix+3)
+	ret 	z
+	jr 		__DSDrawSprite
 
 ; ****************************************************************************************************
 ;
-;								Copy attribute screen to shadow screen
+;									Draw Sprite Main Code
 ;
 ; ****************************************************************************************************
-
-CopyAttributeToShadow:
-	ld 		de,05C00h
-	ld 		hl,05800h
-	ld 		bc,32*24
-	ldir 	
-	ret
-
-; ****************************************************************************************************
-;
-;												Draw Sprite
-;
-; ****************************************************************************************************
-
 
 __DSDrawSprite:
-	ld 		a,(ix+1) 						; get the Y position.
-	cp 		192
-	ret 	nc 								; if >= 24*8 then exit now.	
+	push 	bc 								; save registers
+	push 	de
+	push 	hl
+	ld 		b,(ix+0)						; get the X position
+	ld 		c,(ix+1) 						; get the Y position.
+	call 	CalculatePixelAndAttrAddress 	; calculate pixel/attribute address
+	jr 		nc,__DSPop		 				; off screen
 
-	ld  	e, a 							; save in E
-	and 	7 								; get the three low bits.
-	ld  	h,a 							; goes in H bits 2..0
-
-	ld 		a,e 							; we want bits 7..6 to be in 4..3
-	rra 									; in 6..5
-	rra 									; in 5..4
-	rra										; in 4..3
-
-	and 	018h 							; isolate
-	or 		h 								; or with H
-	or 		040h 							; set bit 6
-	ld 		h,a 							; and copy back.
-
-	ld 		a,e 							; we want bits 5,4,3 to be in slots 7,6,5
-	add 	a,a
-	add 	a,a
-	and 	0E0h
-	ld 		l,a 							; save in L
-
-	ld 		a,(ix+0) 						; get X bits 7..3 - 4..0
-	rra
-	rra
-	rra	
-	and 	1Fh
-	ld 		c,a 							; save X/8 in C
-
-	or  	l 								; or into L and write back
-	ld  	l,a 							; HL now is the base graphic
-	ld 		(__DSLoadScreenAddress+1),hl 	; save it out
-
-	ld 		a,(ix+1) 						; get Y
-	and 	0F8h							; now (Y / 8) * 8
-	ld 		l,a
-	ld 		h,0
-	add 	hl,hl 						
-	add 	hl,hl 							; now (Y / 8) * 32
-
-	ld 		b,058h 							; B = $5800 + (X / 8)
-	add 	hl,bc
 	ld 		(__DSAttributeAddress+1),hl 	; save attribute address
+	ld 		(__DSPixelAddress+1),de 		; save pixel address
 
 ; ****************************************************************************************************
 ;						Copy address of graphic data, self modifying code.
@@ -141,7 +108,7 @@ __DSLoadGraphicData:
 
 	ex 		de,hl 							; now it is in ADE
 
-__DSLoadScreenAddress:
+__DSPixelAddress:
 	ld 		hl,0000h						; where we will write on the screen
 
 	xor 	(hl) 							; XOR those three bytes in to the screen
@@ -161,18 +128,18 @@ __DSLoadScreenAddress:
 ;										Move to the next line down
 ; ****************************************************************************************************
 
-	call 	__DSHLDown 						; HL Down one line
-	ld 		(__DSLoadScreenAddress+1),hl 	; update the screen address.
+	call 	MovePixelAddressDown 						; HL Down one line
+	ld 		(__DSPixelAddress+1),hl 		; update the screen address.
 
-	jr 		c,__DSHNoAttributeDown
+	jr 		c,__DSHNoAttributeDown 			; no attribute change
 
-	push 	hl
-	ld 		hl,(__DSAttributeAddress+1)
+	push 	hl 								; save HL
+	ld 		hl,(__DSAttributeAddress+1) 	; add 32 to attribute address
 	ld 		de,32
 	add 	hl,de
 	ld 		(__DSAttributeAddress+1),hl
-	call 	__DSColourLine
-	pop 	hl
+	call 	__DSColourLine 					; colour that line
+	pop 	hl 								; restore HL
 
 __DSHNoAttributeDown:
 
@@ -188,6 +155,11 @@ __DSExitEarly:
 	ld 		a,(ix+3)						; toggle the erased/drawn bit
 	xor 	080h
 	ld 		(ix+3),a
+
+__DSPop:
+	pop 	hl
+	pop 	de
+	pop 	bc
 	ret
 
 ; ****************************************************************************************************
@@ -231,35 +203,6 @@ __DSCLErase:
 
 ; ****************************************************************************************************
 ;
-;		Advance the line address HL down by 1, handles the slightly odd screen arrangement
-;
-;							If CY clear, then we have changed attribute byte.
-;
-; ****************************************************************************************************
-
-__DSHLDown:
-	inc 	h 								; next line down.
-	ld 		a,h 							; have we stepped over the border
-	and 	7
-	scf 									; if we haven't, return with CY set.
-	ret 	nz
-
-	ld 		a,h 							; fix up three lower bits of high address byte
-	sub 	8
-	ld 		h,a
-
-	ld 		a,l 							; next block of 8 down, high 3 bits of low address byte
-	add 	32
-	ld 		l,a
-	ret		nc
-
-	ld 		a,h 							; next page down ; also it will clear the carry.
-	add 	8
-	ld 		h,a
-	ret
-
-; ****************************************************************************************************
-;
 ;	Shift the 24 bit value AHL left a number of times defined by the x coordinate, set up at the
 ;	start of the drawing routine.
 ;
@@ -290,3 +233,17 @@ __DSShiftEntry:
 	adc 	a,a
 	ret
 
+; ****************************************************************************************************
+;
+;								Copy attribute screen to shadow screen
+;
+; ****************************************************************************************************
+
+CopyAttributeToShadow:
+	exx
+	ld 		de,05C00h 						; to shadow at $5C00
+	ld 		hl,05800h 						; from original at $5800
+	ld 		bc,32*24 						; bytes to copy
+	ldir 	 								; copy.
+	exx
+	ret

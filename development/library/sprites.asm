@@ -4,25 +4,40 @@
 ;
 ; ****************************************************************************************************
 
-WORD_Test:
-	push 		bc
-	push 		de
-	push 		ix
-	call 		TSDraw
-	pop 		ix
-	pop 		de
-	pop			bc
-	jp 			(ix)
-
 	include 	"utils/sprites16x16.asm"
+
+WORD_Test:
+	push 		ix
+	push 		iy
+	call 		TSDraw
+	pop 		iy
+	pop 		ix
+	jp 			(ix)
 
 ; ****************************************************************************************************
 
 TSDraw:
 	call 	CopyAttributeToShadow
 	ld 		ix,testSprite
+	ld 		hl,1000/2
 TSLoop:
-	call 	__DSDrawSprite
+	push 	hl
+	call 	DrawSprite
+	call 	EraseSprite
+	ld 		a,(ix+0)
+	xor 	32
+	ld 		(ix+0),a
+
+	ld 		a,(ix+2)
+	xor 	4
+	ld 		(ix+2),a
+	pop 	hl
+	dec 	hl
+	ld 		a,h
+	or 		l
+	jr 		nz,TSLoop
+	ret
+
 TSDelay:
 	ld 		hl,1000
 TSDelay1:
@@ -30,20 +45,19 @@ TSDelay1:
 	ld 		a,h
 	or 		l
 	jr 		nz,TSDelay1
-	call 	__DSDrawSprite
 	inc 	(ix+0)
 	inc 	(ix+1)
 	ld 		a,(ix+1)
 	cp 		160
 	jr 		nz,TSLoop
-	ld 		(ix+0),64
-	ld 		(ix+1),32
+	ld 		(ix+0),69
+	ld 		(ix+1),33
 	jr 		TSLoop
 
 testSprite:
 	defb 	67
 	defb 	35		
-	defb 	046h,0
+	defb 	045h,0
 	defw 	graphicData,0
 
 graphicData:
