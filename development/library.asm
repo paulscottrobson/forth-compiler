@@ -10,4 +10,4 @@
 	include "library/stack.asm"
 	include "library/misc.asm"
 	include "library/io.asm"
-	include "library/utils/sprites.asm"
+	include "library/sprites.asm"

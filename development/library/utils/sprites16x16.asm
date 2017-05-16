@@ -22,13 +22,29 @@
 ;	+4,5 		pointer to 16 bit pixel data, 32 bytes
 ;	+6,7 		reserved (0)
 ;
+
+
+; ****************************************************************************************************
+;
+;								Copy attribute screen to shadow screen
+;
+; ****************************************************************************************************
+
+CopyAttributeToShadow:
+	ld 		de,05C00h
+	ld 		hl,05800h
+	ld 		bc,32*24
+	ldir 	
+	ret
+
 ; ****************************************************************************************************
 ;
 ;												Draw Sprite
 ;
 ; ****************************************************************************************************
 
-DrawSprite:
+
+__DSDrawSprite:
 	ld 		a,(ix+1) 						; get the Y position.
 	cp 		192
 	ret 	nc 								; if >= 24*8 then exit now.	
@@ -41,6 +57,7 @@ DrawSprite:
 	rra 									; in 6..5
 	rra 									; in 5..4
 	rra										; in 4..3
+
 	and 	018h 							; isolate
 	or 		h 								; or with H
 	or 		040h 							; set bit 6
@@ -57,9 +74,22 @@ DrawSprite:
 	rra
 	rra	
 	and 	1Fh
+	ld 		c,a 							; save X/8 in C
+
 	or  	l 								; or into L and write back
 	ld  	l,a 							; HL now is the base graphic
 	ld 		(__DSLoadScreenAddress+1),hl 	; save it out
+
+	ld 		a,(ix+1) 						; get Y
+	and 	0F8h							; now (Y / 8) * 8
+	ld 		l,a
+	ld 		h,0
+	add 	hl,hl 						
+	add 	hl,hl 							; now (Y / 8) * 32
+
+	ld 		b,058h 							; B = $5800 + (X / 8)
+	add 	hl,bc
+	ld 		(__DSAttributeAddress+1),hl 	; save attribute address
 
 ; ****************************************************************************************************
 ;						Copy address of graphic data, self modifying code.
@@ -81,6 +111,8 @@ DrawSprite:
 	add 	__DSShiftEntry-__DSShiftAHL-2
 __DSOffsetDone:
 	ld 		(__DSShiftAHL+1),a 				; set the JR offset.
+
+	call 	__DSColourLine 					; colour the first line.
 
 ; ****************************************************************************************************
 ;   						   S P R I T E     M A I N     L O O P
@@ -132,6 +164,18 @@ __DSLoadScreenAddress:
 	call 	__DSHLDown 						; HL Down one line
 	ld 		(__DSLoadScreenAddress+1),hl 	; update the screen address.
 
+	jr 		c,__DSHNoAttributeDown
+
+	push 	hl
+	ld 		hl,(__DSAttributeAddress+1)
+	ld 		de,32
+	add 	hl,de
+	ld 		(__DSAttributeAddress+1),hl
+	call 	__DSColourLine
+	pop 	hl
+
+__DSHNoAttributeDown:
+
 	pop 	bc 								; restore counter
 	ld 		a,h
 	cp 		58h								; into attribute memory ?
@@ -144,6 +188,45 @@ __DSExitEarly:
 	ld 		a,(ix+3)						; toggle the erased/drawn bit
 	xor 	080h
 	ld 		(ix+3),a
+	ret
+
+; ****************************************************************************************************
+;
+;										Colour the current line
+;
+; ****************************************************************************************************
+
+__DSColourLine:
+	
+__DSAttributeAddress:
+	ld 		hl,0000 						; address to write colour to.
+	ld 		a,(ix+2)						; get attribute to write.
+	or 		a
+	ret 	z
+
+	bit 	7,(ix+3) 						; if bit 7 is set (e.g. we are erasing)
+	jr 		nz,__DSCLErase
+
+	ld 		(hl),a 							; write 2 bytes out.
+	inc 	hl
+	ld 		(hl),a 
+	ld 		b,a 							; save in B.
+	ld 		a,(ix+0) 						; do not write third attribute out if X mod 8 = 0, fits in two words.
+	and 	7
+	ret 	z
+	inc 	hl 								; do the third attribute byte
+	ld 		(hl),b
+	ret
+
+__DSCLErase:
+	ld 		e,l 							; copy HL to DE
+	ld 		d,h
+	ld 		a,h 							; copy from $5C00-$5EFF to $5800-$5AFF
+	add 	4	
+	ld 		h,a
+	ldi
+	ldi
+	ldi
 	ret
 
 ; ****************************************************************************************************
@@ -207,52 +290,3 @@ __DSShiftEntry:
 	adc 	a,a
 	ret
 
-; ****************************************************************************************************
-
-TSDraw:
-	ld 		ix,testSprite
-TSLoop:
-	call 	DrawSprite
-TSDelay:
-	ld 		hl,1000
-TSDelay1:
-	dec 	hl
-	ld 		a,h
-	or 		l
-	jr 		nz,TSDelay1
-	call 	DrawSprite
-	inc 	(ix+0)
-	inc 	(ix+1)
-	ld 		a,(ix+1)
-	cp 		160
-	jr 		nz,TSLoop
-	ld 		(ix+0),64
-	ld 		(ix+1),32
-	jr 		TSLoop
-
-testSprite:
-	defb 	64
-	defb 	32	
-	defb 	1,0
-	defw 	graphicData,0
-
-graphicData:
-	defb 	0FFh,0FFh
-	defb 	0AAh,0AAh
-	defb 	080h,003h
-	defb 	080h,007h
-
-	defb 	08Fh,00Fh
-	defb 	080h,01Fh
-	defb 	0FFh,0E0h
-	defb 	002h,000h
-
-	defb 	002h,000h
-	defb 	007h,000h
-	defb 	080h,001h
-	defb 	080h,001h
-
-	defb 	080h,001h
-	defb 	080h,001h
-	defb 	080h,001h
-	defb 	0FFh,0FFh

@@ -143,7 +143,7 @@ __CLSLoop2:									; fill 5800-5FFF with 7 (white)
 	ld 		(hl),7
 	inc 	hl
 	ld 		a,h
-	cp 		0x60
+	cp 		0x5B
 	jr		nz,__CLSLoop2
 	ld 		a,1 							; set border to blue.
 	out 	(0xFE),a

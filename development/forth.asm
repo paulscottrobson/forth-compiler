@@ -12,19 +12,9 @@ BootWord:
 	jp 			(iy)
 	defw 		WORD_ClearScreen
 	defw 		WORD_Star
-	defw 		Test
+	defw 		WORD_Test
 	defw 		WORD_Star
 	defw 		WORD_Stop
-
-Test:
-	push 		bc
-	push 		de
-	push 		ix
-	call 		TSDraw
-	pop 		ix
-	pop 		de
-	pop			bc
-	jp 			(ix)
 
 WORD_Star:
 	jp 			(iy)
