@@ -1,9 +1,11 @@
 ; ****************************************************************************************************
 ; ****************************************************************************************************
 ;
-;										16 x n Sprite Routines
+;										16 x 16 Sprite Routines
 ;
-;	Sprites can be either simple XOR, Masked AND/XOR or they can preserve their background data.
+;	These sprites are simple 16x16 XOR which restore the background attributes from a shadow of 
+;	$5800-$5B00 at $5C00-$5F00. It is designed to operate not dissimilarly to the Next ; pure 
+; 	XOR sprites can be removed and moved in any order you like.
 ;
 ;	There is some self modifying code here - the pointers are all kept in SMC, so is the counter
 ;	and it is also used to modify the 24 bit shifter.
@@ -15,13 +17,11 @@
 ;
 ;	+0 			X position (0-255)
 ;	+1 			Y position (0-191)
-;	+2 			Vertical Size (bits 0..6)
-;	+3 			Drawing color (0 = don't do attribute)
-;	+4,5 		pointer to 16 bit pixel data 
-;	+6,7 		either 0 (not back stored) or pointer to background storage (pointer + 3 x vertical size)
-;	+8,9 		either 0 (no mask data) or pointer to mask data, note set to clear background.
+;	+2 			Drawing color (0 = don't do attribute)
+;	+3 			Bit 7 : drawn=1, erased=0
+;	+4,5 		pointer to 16 bit pixel data, 32 bytes
+;	+6,7 		reserved (0)
 ;
-
 ; ****************************************************************************************************
 ;
 ;												Draw Sprite
@@ -62,24 +62,12 @@ DrawSprite:
 	ld 		(__DSLoadScreenAddress+1),hl 	; save it out
 
 ; ****************************************************************************************************
-;						Copy structure details into the self modifying code
+;						Copy address of graphic data, self modifying code.
 ; ****************************************************************************************************
-
-	ld 			a,(ix+2)					; vertical size
-	and 		7Fh
-	ld 			(__DSLoadVerticalCount+1),a
 
 	ld 			l,(ix+4)					; graphic data
 	ld 			h,(ix+5)
 	ld 			(__DSLoadGraphicData+1),hl
-
-	ld 			l,(ix+6)					; background store
-	ld 			h,(ix+7)
-	ld 			(__DSLoadStoreAddress+1),hl
-
-	ld 			l,(ix+8)					; mask data
-	ld 			h,(ix+9)
-	ld 			(__DSLoadMaskAddress+1),hl
 
 ; ****************************************************************************************************
 ;					Set up the pixel shifter for the 3 LSB of the x coordinate
@@ -95,89 +83,19 @@ __DSOffsetDone:
 	ld 		(__DSShiftAHL+1),a 				; set the JR offset.
 
 ; ****************************************************************************************************
-;								Copy the starting screen position
-; ****************************************************************************************************
-
-	ld 		hl,(__DSLoadStoreAddress+1) 	; get where we are copying old screen data to
-	ld 		a,h
-	or 		l
-	jr 		z,__DSMainLoop
-	ld 		de,(__DSLoadScreenAddress+1)	; this is where we copy stuff to on the screen
-	ld 		(hl),e 							; copy that address into the first 2 bytes of store address
-	inc 	hl
-	ld 		(hl),d
-	inc 	hl
-	ld 		(__DSLoadStoreAddress+1),hl 	; write it back
-
-; ****************************************************************************************************
 ;   						   S P R I T E     M A I N     L O O P
 ; ****************************************************************************************************
 
+	ld 			b,16 						; reset the draw counter to 16.
 __DSMainLoop:
-
-; ****************************************************************************************************
-;						Copy current screen address to storage if it exists
-; ****************************************************************************************************
-
-__DSLoadStoreAddress:
-	ld 		de,0 							; look at back storage
-	ld 		a,d 							; if zero, then we don't copy out.
-	or 		e
-	jr 		z,__DSMaskGraphicOutline
-	ld 		hl,(__DSLoadScreenAddress+1) 	; HL = source DE = target
-	ldi 									; copy three bytes. 
-	ldi
-	ldi
-	ld 		(__DSLoadStoreAddress+1),de 	; save the new target address, 3 bytes on.
-
-; ****************************************************************************************************
-;						Mask the graphic mask onto the screen, if it is in use
-; ****************************************************************************************************
-
-__DSMaskGraphicOutline:
-
-__DSLoadMaskAddress:
-	ld 		hl,0 							; mask data address
-	ld 		a,h
-	or 		l 								; if mask address is zero, then don't do the mask.
-	jr 		z,__DSXorGraphic
-
-	ld 		d,(hl) 							; read mask into DE
-	inc 	hl
-	ld 		e,(hl)
-	inc 	hl
-	ld 		(__DSLoadMaskAddress+1),hl 		; update the mask data address
-
-	ex 		de,hl 							; 16 bit now in HL.
-	xor  	a 								; 24 bit graphic in AHL
-	call 	__DSShiftAHL					; shift it accordingly
-	ex 		de,hl 							; now it is in ADE
-
-__DSLoadScreenAddress:
-	ld 		hl,4A12h						; where we will write on the screen
-
-	cpl 									; mask the ADE bytes - 1's complement each and AND into screen
-	and		(hl)
-	ld 		(hl),a
-	inc 	l
-	ld 		a,d
-	cpl
-	and		(hl)
-	ld 		(hl),a
-	inc 	l
-	ld 		a,e
-	cpl
-	and 	(hl)
-	ld 		(hl),a
-
+	push 		bc
 
 ; ****************************************************************************************************
 ;								XOR the graphic data into the screen
 ; ****************************************************************************************************
-__DSXorGraphic:
 
 __DSLoadGraphicData:
-	ld 		hl,0 							; pointer to graphic data (modified in-line)
+	ld 		hl,0000h 						; pointer to graphic data (modified in-line)
 	ld 		d,(hl) 							; read into DE
 	inc 	hl
 	ld 		e,(hl)
@@ -190,7 +108,9 @@ __DSLoadGraphicData:
 	call 	__DSShiftAHL					; shift it accordingly
 
 	ex 		de,hl 							; now it is in ADE
-	ld 		hl,(__DSLoadScreenAddress+1) 	; HL is where it is XORed into.
+
+__DSLoadScreenAddress:
+	ld 		hl,0000h						; where we will write on the screen
 
 	xor 	(hl) 							; XOR those three bytes in to the screen
 	ld 		(hl),a
@@ -210,25 +130,27 @@ __DSLoadGraphicData:
 ; ****************************************************************************************************
 
 	call 	__DSHLDown 						; HL Down one line
+	ld 		(__DSLoadScreenAddress+1),hl 	; update the screen address.
+
+	pop 	bc 								; restore counter
 	ld 		a,h
 	cp 		58h								; into attribute memory ?
 	jr 		z,__DSExitEarly 				; off bottom of screen, end of sprite draw
 
-__DSNoOverflowScreen1
-	ld 		(__DSLoadScreenAddress+1),hl 	; update the screen address.
 
-__DSLoadVerticalCount:
-	ld 		a,10 							; count of lines to do
-	dec 	a 								; decrement and update
-	ld 		(__DSLoadVerticalCount+1),a 	
-	jr 		nz,__DSMainLoop 				; keep going till done all lines, or reached the end of screen memory
+	djnz	__DSMainLoop 					; keep going till done all lines, or reached the end of screen memory
+
 __DSExitEarly:
-
+	ld 		a,(ix+3)						; toggle the erased/drawn bit
+	xor 	080h
+	ld 		(ix+3),a
 	ret
 
 ; ****************************************************************************************************
 ;
 ;		Advance the line address HL down by 1, handles the slightly odd screen arrangement
+;
+;							If CY clear, then we have changed attribute byte.
 ;
 ; ****************************************************************************************************
 
@@ -236,6 +158,7 @@ __DSHLDown:
 	inc 	h 								; next line down.
 	ld 		a,h 							; have we stepped over the border
 	and 	7
+	scf 									; if we haven't, return with CY set.
 	ret 	nz
 
 	ld 		a,h 							; fix up three lower bits of high address byte
@@ -247,44 +170,9 @@ __DSHLDown:
 	ld 		l,a
 	ret		nc
 
-	ld 		a,h 							; next page down.
+	ld 		a,h 							; next page down ; also it will clear the carry.
 	add 	8
 	ld 		h,a
-	ret
-
-; ****************************************************************************************************
-;
-;						Repair damage - restore saved screen for sprite at IX
-;
-; ****************************************************************************************************
-
-__DSRestoreSavedScreen:
-	ld 		b,(ix+2)						; set counter
-	res 	7,b
-	ld 		l,(ix+6)						; get address of data
-	ld 		h,(ix+7)
-	ld 		a,h 							; return if zero (e.g. no storage)
-	or 		l
-	ret 	z
-	ld 		e,(hl)							; read start address of screen into DE
-	inc 	hl
-	ld 		d,(hl)
-	inc 	hl
-
-__DSRLoop:
-	push 	bc
-	ldi  									; copy three bytes (HL) to (DE)	
-	ldi 
-	ldi 
-	dec 	de 								; fix up DE 								
-	dec 	de
-	dec 	de
-	ex 		de,hl 							; HL = screen
-	call	__DSHLDown	 					; down one line
-	ex 		de,hl 							; put back so DE screen HL data
-
-	pop		bc 								; do once for each line
-	djnz 	__DSRLoop
 	ret
 
 ; ****************************************************************************************************
@@ -325,17 +213,18 @@ TSDraw:
 	ld 		ix,testSprite
 TSLoop:
 	call 	DrawSprite
-	ld 		hl,1
 TSDelay:
+	ld 		hl,1000
+TSDelay1:
 	dec 	hl
 	ld 		a,h
 	or 		l
-	jr 		nz,TSDelay
-	call	__DSRestoreSavedScreen
+	jr 		nz,TSDelay1
+	call 	DrawSprite
 	inc 	(ix+0)
 	inc 	(ix+1)
-	ld 		a,(ix+0)
-	cp 		192
+	ld 		a,(ix+1)
+	cp 		160
 	jr 		nz,TSLoop
 	ld 		(ix+0),64
 	ld 		(ix+1),32
@@ -344,35 +233,26 @@ TSDelay:
 testSprite:
 	defb 	64
 	defb 	32	
-	defb 	10
-	defb 	0
-	defw 	graphicData
-	defw 	backStore
-	defw 	maskData
-
-backStore:
-	defs 	10*3+2
+	defb 	1,0
+	defw 	graphicData,0
 
 graphicData:
 	defb 	0FFh,0FFh
 	defb 	0AAh,0AAh
 	defb 	080h,003h
 	defb 	080h,007h
+
 	defb 	08Fh,00Fh
 	defb 	080h,01Fh
 	defb 	0FFh,0E0h
 	defb 	002h,000h
+
 	defb 	002h,000h
 	defb 	007h,000h
+	defb 	080h,001h
+	defb 	080h,001h
 
-maskData:
+	defb 	080h,001h
+	defb 	080h,001h
+	defb 	080h,001h
 	defb 	0FFh,0FFh
-	defb 	0FFh,0FFh
-	defb 	0FFh,0FFh
-	defb 	0FFh,0FFh
-	defb 	0FFh,0FFh
-	defb 	0FFh,0FFh
-	defb 	0FFh,0FFh
-	defb 	0FFh,0FFh
-	defb 	0FFh,0FFh
-
