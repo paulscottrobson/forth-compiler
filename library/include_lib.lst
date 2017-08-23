@@ -1,5 +1,5 @@
               	; --------------------------------------
-              	; zasm: assemble "library.asm"
+              	; zasm: assemble "include_lib.asm"
               	; date: 2017-08-23 16:01:55
               	; --------------------------------------
 
@@ -19,7 +19,8 @@
               	
               	boundary = 4
               	
-              	    include     "system.asm"
+              	
+              	; = > < >= <= <> (not initially)
               	; ***********************************************************************************
               	; ***********************************************************************************
               	;
@@ -42,9 +43,9 @@
 8000:         	word_0br:                               ; [[[0BR]]]
 8000: E1      	    pop     hl                          ; get TOS
 8001: 7C      	    ld      a,h                         ; check if zero
-8002: B5      	    or      l 
+8002: B5      	    or      l
 8003: 2807    	    jr      z,word_Br                   ; if it is execute [BR] unconditional branch
-8005: 03      	    inc     bc                          ; if non zero skip over branch address    
+8005: 03      	    inc     bc                          ; if non zero skip over branch address
 8006: 03      	    inc     bc
 8007: DDE9    	    jp      (ix)                        ; exit
               	
@@ -59,10 +60,10 @@
 800C:         	word_Br:                                ; [[[BR]]]
 800C: 0A      	    ld      a,(bc)                      ; read next word in low high order into BC
 800D: 6F      	    ld      l,a                         ; temp store for LSB
-800E: 03      	    inc     bc                  
+800E: 03      	    inc     bc
 800F: 0A      	    ld      a,(bc)                      ; read MSB
 8010: 47      	    ld      b,a                         ; put into BC
-8011: 4D      	    ld      c,l                         
+8011: 4D      	    ld      c,l
 8012: DDE9    	    jp      (ix)                        ; exit
               	
               	; ***********************************************************************************
@@ -94,12 +95,10 @@
 801D: 03      	    inc     bc
 801E: 6F      	    ld      l,a
 801F: AF      	    xor     a                           ; zero A
-8020:         	__libs_pushALAndExit:    
+8020:         	__libs_pushALAndExit:
 8020: 67      	    ld      h,a                         ; put A in H
 8021: E5      	    push    hl                          ; stack it
-8022: DDE9    	    jp      (ix)                        ; and exit.
-              	    include     "constants.asm"
-              	; ***********************************************************************************
+8022: DDE9    	    jp      (ix)                        ; and exit.; ***********************************************************************************
               	; ***********************************************************************************
               	;
               	;       Name:       constants.asm
@@ -131,7 +130,7 @@
               		coreconst 5
 8034: 2E05    		ld 		l,5					; [[5]]
 8036: 1810    		jr 		__libc_const
-              		coreconst 8 
+              		coreconst 8
 8038: 2E08    		ld 		l,8					; [[8]]
 803A: 180C    		jr 		__libc_const
               		coreconst 10
@@ -148,8 +147,6 @@
 8048: 2600    		ld 		h,0 						; HL now constant
 804A: E5      		push 	hl 							; push on stack
 804B: DDE9    		jp 		(ix) 						; exit
-              	
-              	    include     "unary.asm"
               	; ***********************************************************************************
               	; ***********************************************************************************
               	;
@@ -170,7 +167,7 @@
 804D: FFFFFF  	    align   boundary
               	
 8050:         	word_add1:                              ; [[1+]]
-8050: E1      	    pop     hl 
+8050: E1      	    pop     hl
 8051:         	__libu_incHLAndPush:
 8051: 23      	    inc     hl
 8052: 1815    	    jr      __libu_pushHLExit
@@ -184,7 +181,7 @@
               	    align   boundary
               	
 8054:         	word_add2:                              ; [[2+]]
-8054: E1      	    pop     hl 
+8054: E1      	    pop     hl
 8055: 23      	    inc     hl
 8056: 1811    	    jr      __libu_pushHLExit
               	
@@ -197,8 +194,8 @@
               	    align   boundary
               	
 8058:         	word_sub1:                              ; [[1-]]
-8058: E1      	    pop     hl 
-8059:         	__libu_decHLAndPush:    
+8058: E1      	    pop     hl
+8059:         	__libu_decHLAndPush:
 8059: 2B      	    dec     hl
 805A: 180D    	    jr      __libu_pushHLExit
               	
@@ -211,7 +208,7 @@
               	    align   boundary
               	
 805C:         	word_sub2:                              ; [[2-]]
-805C: E1      	    pop     hl 
+805C: E1      	    pop     hl
 805D: 2B      	    dec     hl
 805E: 1809    	    jr      __libu_pushHLExit
               	
@@ -224,7 +221,7 @@
               	    align   boundary
               	
 8060:         	word_shiftleft:                         ; [[2*]]
-8060: E1      	    pop     hl 
+8060: E1      	    pop     hl
 8061: 29      	    add     hl,hl
 8062: 1805    	    jr      __libu_pushHLExit
               	
@@ -237,7 +234,7 @@
               	    align   boundary
               	
 8064:         	word_shiftright:                        ; [[2/]]
-8064: E1      	    pop     hl 
+8064: E1      	    pop     hl
 8065: CB2C    	    sra     h 							; shift h right into carry
 8067: CB1D    	    rr      l 							; rotate l right from carry
 8069:         	__libu_pushHLExit:
@@ -253,7 +250,7 @@
               	    align   boundary
               	
 806C:         	word_negate:                            ; [[0-]]
-806C: D9      	    exx                                 
+806C: D9      	    exx
 806D: D1      	    pop     de                          ; values to subtract
 806E: AF      	    xor 	a 							; clear A and carry
 806F: 6F      	    ld 		l,a 						; use that to zero HL
@@ -261,8 +258,6 @@
 8071: ED52    	    sbc 	hl,de 						; calculate 0-value
 8073: E5      	    push    hl 							; push on stack and exit
 8074: DDE9    	    jp      (ix)
-              	
-              	    include     "binary.asm"    
               	; ***********************************************************************************
               	; ***********************************************************************************
               	;
@@ -287,7 +282,7 @@
 8079: D1      	    pop     de                          ; values to add
 807A: E1      	    pop     hl
 807B: 19      	    add     hl,de                       ; add them.
-807C:         	__libb_pushHLExxAndExit:    
+807C:         	__libb_pushHLExxAndExit:
 807C: E5      	    push    hl                          ; save result
 807D: D9      	    exx                                 ; fix up registers
 807E: DDE9    	    jp      (ix)
@@ -302,7 +297,7 @@
 8080: D9      	    exx                                 ; need both registers
 8081: D1      	    pop     de                          ; values to add
 8082: E1      	    pop     hl
-8083:         	__subtractAndSave:    
+8083:         	__subtractAndSave:
 8083: A7      	    and     a                           ; clear carry
 8084: ED52    	    sbc     hl,de                       ; subtract them.
 8086: 18F4    	    jr      __libb_pushHLExxAndExit     ; push result and exit
@@ -365,9 +360,7 @@
 80A6: 7D      	    ld      a,l
 80A7: AB      	    xor     e
 80A8: 6F      	    ld      l,a
-80A9: 18D1    	    jr      __libb_pushHLExxAndExit     ; push result and exit
-              	    include     "memory.asm"
-              	; ***********************************************************************************
+80A9: 18D1    	    jr      __libb_pushHLExxAndExit     ; push result and exit; ***********************************************************************************
               	; ***********************************************************************************
               	;
               	;       Name:       memory.asm
@@ -441,8 +434,8 @@
 80C6: D1      	    pop     de                          ; data to write
 80C7: 73      	    ld      (hl),e                      ; write LSB
 80C8:         	__libm_exxAndExit:                      ; exit routine, exx and exit where needed.
-80C8: D9      	    exx                                 ; original register set                        
-80C9: DDE9    	    jp      (ix)    
+80C8: D9      	    exx                                 ; original register set
+80C9: DDE9    	    jp      (ix)
               	
               	; ***********************************************************************************
               	;
@@ -463,9 +456,7 @@
 80D3: 8E      	    adc     (hl)
 80D4: 77      	    ld      (hl),a
 80D5: D9      	    exx                                 ; original set and exit
-80D6: DDE9    	    jp      (ix)
-              	    include     "rstack.asm"
-              	; ***********************************************************************************
+80D6: DDE9    	    jp      (ix); ***********************************************************************************
               	; ***********************************************************************************
               	;
               	;       Name:       rstack.asm
@@ -490,7 +481,7 @@
 80DA: 13      	    inc     de
 80DB: 1A      	    ld      a,(de)                      ; then MSB
 80DC: 47      	    ld      b,a
-80DD: DDE9    	    jp      (ix)    
+80DD: DDE9    	    jp      (ix)
               	
               	; ***********************************************************************************
               	;
@@ -526,9 +517,7 @@
 80F0: 1B      	    dec     de                          ; LSB second
 80F1: 7D      	    ld      a,l
 80F2: 12      	    ld      (de),a
-80F3: DDE9    	    jp      (ix)
-              	    include     "conditional.asm"    
-              	; ***********************************************************************************
+80F3: DDE9    	    jp      (ix); ***********************************************************************************
               	; ***********************************************************************************
               	;
               	;       Name:       conditional.asm
@@ -549,7 +538,7 @@
               	
 80F8:         	word_0Equal:                            ; [[0=]]
 80F8: E1      	    pop     hl                          ; get value
-80F9:         	__util_testzero:    
+80F9:         	__util_testzero:
 80F9: 7C      	    ld      a,h                         ; check if zero
 80FA: B5      	    or      l
 80FB: 2817    	    jr      z,word_ConstMinus1          ; if is, return -1
@@ -612,9 +601,7 @@
 811C:         	word_false:                             ; [[false]]
 811C: 210000  	    ld      hl,0
 811F: E5      	    push    hl
-8120: DDE9    	    jp      (ix)
-              	    include     "stack.asm"
-              	; ***********************************************************************************
+8120: DDE9    	    jp      (ix); ***********************************************************************************
               	; ***********************************************************************************
               	;
               	;       Name:       stack.asm
@@ -678,10 +665,10 @@
 8138:         	word_Swap:                              ; [[swap]]
 8138: D9      	    exx                                 ; alt register set
 8139: D1      	    pop     de                          ; get values
-813A: E1      	    pop     hl                      
+813A: E1      	    pop     hl
 813B: D5      	    push    de                          ; write back in the other order.
 813C: E5      	    push    hl
-813D:         	__libs_exxAndExit:    
+813D:         	__libs_exxAndExit:
 813D: D9      	    exx
 813E: DDE9    	    jp      (ix)
               	
@@ -696,7 +683,7 @@
 8140:         	word_Over:                              ; [[over]]
 8140: D9      	    exx                                 ; alt register set
 8141: D1      	    pop     de                          ; get values
-8142: E1      	    pop     hl                      
+8142: E1      	    pop     hl
 8143: E5      	    push    hl                          ; write back
 8144: D5      	    push    de
 8145: E5      	    push    hl                          ; push the 2nd value on top.
@@ -741,10 +728,7 @@
 815B: 56      	    ld      d,(hl)                      ; read high byte
 815C: D5      	    push    de                          ; push read value onto the stack
 815D: 18DE    	    jr      __libs_exxAndExit           ; exx and exit.
-              	
-              	; = > < >= <= <> (not initially)
-              	
 
 
-total time: 0.0032 sec.
+total time: 0.0013 sec.
 no errors

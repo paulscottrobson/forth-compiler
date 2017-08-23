@@ -23,4 +23,4 @@ boundary = 4
     include     "stack.asm"
 
 ; = > < >= <= <> (not initially)
-; pick
+
