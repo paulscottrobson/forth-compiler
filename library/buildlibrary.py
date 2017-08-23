@@ -44,6 +44,6 @@ keys.sort()
 #		Write out codes file.
 #
 hCodes = open("include_lib.codes","w")
-hCodes.write("\n".join(["{0}:{1}".format(library[x],x) for x in keys]))
+hCodes.write("\n".join(["{0}:={1}".format(library[x],x) for x in keys]))
 hCodes.close()
-print(keys)
+print("Core word set : "+" ".join(keys))

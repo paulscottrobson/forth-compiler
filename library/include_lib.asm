@@ -84,7 +84,7 @@ word_literal:                           ; [[[LIT]]]
 
     align   boundary
 
-word_shortunsignedliteral:              ; [[[USHORTLIT]]]
+word_shortunsignedliteral:              ; [[[USLIT]]]
     ld      a,(bc)                      ; read literal from next byte LSB first
     inc     bc
     ld      l,a
@@ -475,6 +475,19 @@ word_returnToData:                      ; [[R>]]
     ld      h,a
     inc     de
     push    hl                          ; push on data stack
+    jp      (ix)                        ; exit
+
+; ***********************************************************************************
+;
+;                               Drop top of return stack
+;
+; ***********************************************************************************
+
+    align   boundary
+
+word_dropReturn:                        ; [[RDROP]]
+    inc     de                          ; pop 2 bytes off.
+    inc     de
     jp      (ix)                        ; exit
 
 ; ***********************************************************************************

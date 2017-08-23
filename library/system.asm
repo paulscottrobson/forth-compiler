@@ -67,7 +67,7 @@ word_literal:                           ; [[[LIT]]]
 
     align   boundary
 
-word_shortunsignedliteral:              ; [[[USHORTLIT]]]
+word_shortunsignedliteral:              ; [[[USLIT]]]
     ld      a,(bc)                      ; read literal from next byte LSB first
     inc     bc
     ld      l,a

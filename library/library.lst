@@ -1,6 +1,6 @@
               	; --------------------------------------
               	; zasm: assemble "library.asm"
-              	; date: 2017-08-23 16:01:55
+              	; date: 2017-08-23 21:28:27
               	; --------------------------------------
 
 
@@ -89,7 +89,7 @@
               	
 801B: FF      	    align   boundary
               	
-801C:         	word_shortunsignedliteral:              ; [[[USHORTLIT]]]
+801C:         	word_shortunsignedliteral:              ; [[[USLIT]]]
 801C: 0A      	    ld      a,(bc)                      ; read literal from next byte LSB first
 801D: 03      	    inc     bc
 801E: 6F      	    ld      l,a
@@ -512,21 +512,34 @@
               	
               	; ***********************************************************************************
               	;
-              	;                       Mote top of data stack to return stack
+              	;                               Drop top of return stack
               	;
               	; ***********************************************************************************
               	
 80E9: FFFFFF  	    align   boundary
               	
-80EC:         	word_dataToReturn:                      ; [[>R]]
-80EC: E1      	    pop     hl                          ; value to save
-80ED: 1B      	    dec     de                          ; MSB first
-80EE: 7C      	    ld      a,h
-80EF: 12      	    ld      (de),a
-80F0: 1B      	    dec     de                          ; LSB second
-80F1: 7D      	    ld      a,l
-80F2: 12      	    ld      (de),a
-80F3: DDE9    	    jp      (ix)
+80EC:         	word_dropReturn:                        ; [[RDROP]]
+80EC: 13      	    inc     de                          ; pop 2 bytes off.
+80ED: 13      	    inc     de
+80EE: DDE9    	    jp      (ix)                        ; exit
+              	
+              	; ***********************************************************************************
+              	;
+              	;                       Mote top of data stack to return stack
+              	;
+              	; ***********************************************************************************
+              	
+              	    align   boundary
+              	
+80F0:         	word_dataToReturn:                      ; [[>R]]
+80F0: E1      	    pop     hl                          ; value to save
+80F1: 1B      	    dec     de                          ; MSB first
+80F2: 7C      	    ld      a,h
+80F3: 12      	    ld      (de),a
+80F4: 1B      	    dec     de                          ; LSB second
+80F5: 7D      	    ld      a,l
+80F6: 12      	    ld      (de),a
+80F7: DDE9    	    jp      (ix)
               	    include     "conditional.asm"    
               	; ***********************************************************************************
               	; ***********************************************************************************
@@ -545,15 +558,15 @@
               	;
               	; ***********************************************************************************
               	
-80F5: FFFFFF  	    align   boundary
+80F9: FFFFFF  	    align   boundary
               	
-80F8:         	word_0Equal:                            ; [[0=]]
-80F8: E1      	    pop     hl                          ; get value
-80F9:         	__util_testzero:    
-80F9: 7C      	    ld      a,h                         ; check if zero
-80FA: B5      	    or      l
-80FB: 2817    	    jr      z,word_ConstMinus1          ; if is, return -1
-80FD: 181D    	    jr      word_ConstZero
+80FC:         	word_0Equal:                            ; [[0=]]
+80FC: E1      	    pop     hl                          ; get value
+80FD:         	__util_testzero:    
+80FD: 7C      	    ld      a,h                         ; check if zero
+80FE: B5      	    or      l
+80FF: 2817    	    jr      z,word_ConstMinus1          ; if is, return -1
+8101: 181D    	    jr      word_ConstZero
               	
               	; ***********************************************************************************
               	;
@@ -561,13 +574,13 @@
               	;
               	; ***********************************************************************************
               	
-80FF: FF      	    align   boundary
+8103: FF      	    align   boundary
               	
-8100:         	word_0Less:                             ; [[0<]]
-8100: E1      	    pop     hl                          ; get value
-8101: CB7C    	    bit     7,h                         ; check sign bit
-8103: 200F    	    jr      nz,word_ConstMinus1         ; if is set, return -1
-8105: 1815    	    jr      word_ConstZero
+8104:         	word_0Less:                             ; [[0<]]
+8104: E1      	    pop     hl                          ; get value
+8105: CB7C    	    bit     7,h                         ; check sign bit
+8107: 200F    	    jr      nz,word_ConstMinus1         ; if is set, return -1
+8109: 1815    	    jr      word_ConstZero
               	
               	; ***********************************************************************************
               	;
@@ -575,16 +588,16 @@
               	;
               	; ***********************************************************************************
               	
-8107: FF      	    align   boundary
+810B: FF      	    align   boundary
               	
-8108:         	word_0Greater:                          ; [[0>]]
-8108: E1      	    pop     hl                          ; get value
-8109: CB7C    	    bit     7,h                         ; check sign bit
-810B: 200F    	    jr      nz,word_ConstZero           ; if is set, return 0 as it's negative
-810D: 7C      	    ld      a,h                         ; if not check if zero
-810E: B5      	    or      l
-810F: 280B    	    jr      z,word_ConstZero            ; if it is, return 0.
-8111: 1801    	    jr      word_ConstMinus1            ; return -1 as > 0
+810C:         	word_0Greater:                          ; [[0>]]
+810C: E1      	    pop     hl                          ; get value
+810D: CB7C    	    bit     7,h                         ; check sign bit
+810F: 200F    	    jr      nz,word_ConstZero           ; if is set, return 0 as it's negative
+8111: 7C      	    ld      a,h                         ; if not check if zero
+8112: B5      	    or      l
+8113: 280B    	    jr      z,word_ConstZero            ; if it is, return 0.
+8115: 1801    	    jr      word_ConstMinus1            ; return -1 as > 0
               	
               	; ***********************************************************************************
               	;
@@ -592,13 +605,13 @@
               	;
               	; ***********************************************************************************
               	
-8113: FF      	    align   boundary
+8117: FF      	    align   boundary
               	
-8114:         	word_ConstMinus1:                       ; [[-1]]
-8114:         	word_true:                              ; [[true]]
-8114: 21FFFF  	    ld      hl,-1
-8117: E5      	    push    hl
-8118: DDE9    	    jp      (ix)
+8118:         	word_ConstMinus1:                       ; [[-1]]
+8118:         	word_true:                              ; [[true]]
+8118: 21FFFF  	    ld      hl,-1
+811B: E5      	    push    hl
+811C: DDE9    	    jp      (ix)
               	
               	; ***********************************************************************************
               	;
@@ -606,13 +619,13 @@
               	;
               	; ***********************************************************************************
               	
-811A: FFFF    	    align   boundary
+811E: FFFF    	    align   boundary
               	
-811C:         	word_ConstZero:                         ; [[0]]
-811C:         	word_false:                             ; [[false]]
-811C: 210000  	    ld      hl,0
-811F: E5      	    push    hl
-8120: DDE9    	    jp      (ix)
+8120:         	word_ConstZero:                         ; [[0]]
+8120:         	word_false:                             ; [[false]]
+8120: 210000  	    ld      hl,0
+8123: E5      	    push    hl
+8124: DDE9    	    jp      (ix)
               	    include     "stack.asm"
               	; ***********************************************************************************
               	; ***********************************************************************************
@@ -631,15 +644,15 @@
               	;
               	; ***********************************************************************************
               	
-8122: FFFF    	    align   boundary
+8126: FFFF    	    align   boundary
               	
-8124:         	word_QDup:                              ; [[?dup]]
-8124: E1      	    pop     hl                          ; examine TOS
-8125: E5      	    push    hl                          ; don't drop it - just check it.
-8126: 7C      	    ld      a,h                         ; check if zero.
-8127: B5      	    or      l
-8128: 2002    	    jr      nz,word_Dup                 ; if not, do DUP
-812A: DDE9    	    jp      (ix)                        ; otherwise exit.
+8128:         	word_QDup:                              ; [[?dup]]
+8128: E1      	    pop     hl                          ; examine TOS
+8129: E5      	    push    hl                          ; don't drop it - just check it.
+812A: 7C      	    ld      a,h                         ; check if zero.
+812B: B5      	    or      l
+812C: 2002    	    jr      nz,word_Dup                 ; if not, do DUP
+812E: DDE9    	    jp      (ix)                        ; otherwise exit.
               	
               	; ***********************************************************************************
               	;
@@ -649,11 +662,11 @@
               	
               	    align   boundary
               	
-812C:         	word_Dup:                               ; [[dup]]
-812C: E1      	    pop     hl                          ; get tos
-812D: E5      	    push    hl                          ; push twice
-812E: E5      	    push    hl
-812F: DDE9    	    jp      (ix)                        ; otherwise exit.
+8130:         	word_Dup:                               ; [[dup]]
+8130: E1      	    pop     hl                          ; get tos
+8131: E5      	    push    hl                          ; push twice
+8132: E5      	    push    hl
+8133: DDE9    	    jp      (ix)                        ; otherwise exit.
               	
               	; ***********************************************************************************
               	;
@@ -661,11 +674,11 @@
               	;
               	; ***********************************************************************************
               	
-8131: FFFFFF  	    align   boundary
+8135: FFFFFF  	    align   boundary
               	
-8134:         	word_Drop:                              ; [[drop]]
-8134: E1      	    pop     hl                          ; dump tos
-8135: DDE9    	    jp      (ix)
+8138:         	word_Drop:                              ; [[drop]]
+8138: E1      	    pop     hl                          ; dump tos
+8139: DDE9    	    jp      (ix)
               	
               	; ***********************************************************************************
               	;
@@ -673,17 +686,17 @@
               	;
               	; ***********************************************************************************
               	
-8137: FF      	    align   boundary
+813B: FF      	    align   boundary
               	
-8138:         	word_Swap:                              ; [[swap]]
-8138: D9      	    exx                                 ; alt register set
-8139: D1      	    pop     de                          ; get values
-813A: E1      	    pop     hl                      
-813B: D5      	    push    de                          ; write back in the other order.
-813C: E5      	    push    hl
-813D:         	__libs_exxAndExit:    
-813D: D9      	    exx
-813E: DDE9    	    jp      (ix)
+813C:         	word_Swap:                              ; [[swap]]
+813C: D9      	    exx                                 ; alt register set
+813D: D1      	    pop     de                          ; get values
+813E: E1      	    pop     hl                      
+813F: D5      	    push    de                          ; write back in the other order.
+8140: E5      	    push    hl
+8141:         	__libs_exxAndExit:    
+8141: D9      	    exx
+8142: DDE9    	    jp      (ix)
               	
               	; ***********************************************************************************
               	;
@@ -693,14 +706,14 @@
               	
               	    align   boundary
               	
-8140:         	word_Over:                              ; [[over]]
-8140: D9      	    exx                                 ; alt register set
-8141: D1      	    pop     de                          ; get values
-8142: E1      	    pop     hl                      
-8143: E5      	    push    hl                          ; write back
-8144: D5      	    push    de
-8145: E5      	    push    hl                          ; push the 2nd value on top.
-8146: 18F5    	    jr      __libs_exxAndExit           ; exx and exit.
+8144:         	word_Over:                              ; [[over]]
+8144: D9      	    exx                                 ; alt register set
+8145: D1      	    pop     de                          ; get values
+8146: E1      	    pop     hl                      
+8147: E5      	    push    hl                          ; write back
+8148: D5      	    push    de
+8149: E5      	    push    hl                          ; push the 2nd value on top.
+814A: 18F5    	    jr      __libs_exxAndExit           ; exx and exit.
               	
               	; ***********************************************************************************
               	;
@@ -710,17 +723,17 @@
               	
               	    align   boundary
               	
-8148:         	word_Rot:                               ; [[rot]]
-8148: D9      	    exx
-8149: C1      	    pop     bc                          ; BC = TOS
-814A: D1      	    pop     de                          ; DE = 2nd
-814B: E1      	    pop     hl                          ; HL = 3rd
+814C:         	word_Rot:                               ; [[rot]]
+814C: D9      	    exx
+814D: C1      	    pop     bc                          ; BC = TOS
+814E: D1      	    pop     de                          ; DE = 2nd
+814F: E1      	    pop     hl                          ; HL = 3rd
               	
-814C: D5      	    push    de                          ; 2nd to the bottom
-814D: C5      	    push    bc                          ; tos on that
-814E: E5      	    push    hl                          ; and the 3rd item moves to the top
-814F: D9      	    exx
-8150: DDE9    	    jp      (ix)
+8150: D5      	    push    de                          ; 2nd to the bottom
+8151: C5      	    push    bc                          ; tos on that
+8152: E5      	    push    hl                          ; and the 3rd item moves to the top
+8153: D9      	    exx
+8154: DDE9    	    jp      (ix)
               	
               	; ***********************************************************************************
               	;
@@ -728,23 +741,23 @@
               	;
               	; ***********************************************************************************
               	
-8152: FFFF    	    align   boundary
+8156: FFFF    	    align   boundary
               	
-8154:         	word_Pick:                              ; [[pick]]
-8154: D9      	    exx                                 ; need all registers
-8155: F9      	    ld      sp,hl                       ; put stack pointer in HL.
-8156: D1      	    pop     de                          ; this is the index into the stack
-8157: 19      	    add     hl,de                       ; add 2 x to the stack, now points to low value
-8158: 19      	    add     hl,de
-8159: 5E      	    ld      e,(hl)                      ; read low byte
-815A: 23      	    inc     hl
-815B: 56      	    ld      d,(hl)                      ; read high byte
-815C: D5      	    push    de                          ; push read value onto the stack
-815D: 18DE    	    jr      __libs_exxAndExit           ; exx and exit.
+8158:         	word_Pick:                              ; [[pick]]
+8158: D9      	    exx                                 ; need all registers
+8159: F9      	    ld      sp,hl                       ; put stack pointer in HL.
+815A: D1      	    pop     de                          ; this is the index into the stack
+815B: 19      	    add     hl,de                       ; add 2 x to the stack, now points to low value
+815C: 19      	    add     hl,de
+815D: 5E      	    ld      e,(hl)                      ; read low byte
+815E: 23      	    inc     hl
+815F: 56      	    ld      d,(hl)                      ; read high byte
+8160: D5      	    push    de                          ; push read value onto the stack
+8161: 18DE    	    jr      __libs_exxAndExit           ; exx and exit.
               	
               	; = > < >= <= <> (not initially)
               	
 
 
-total time: 0.0032 sec.
+total time: 0.0027 sec.
 no errors
